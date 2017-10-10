@@ -42,24 +42,9 @@ class ESN(BaseESN):
                 sklearn_sag
         """
 
-
-
-    """
-        Fits the ESN so that by applying the inputData the outputData will be produced.
-    """
-    def fit(self, inputData, outputData, transient_quota=0.05, verbose=0):
-        #check the input data
-        if inputData.shape[0] != outputData.shape[0]:
-            raise ValueError("Amount of input and output datasets is not equal - {0} != {1}".format(inputData.shape[0], outputData.shape[0]))
-
-        trainLength = inputData.shape[0]
-
-        skipLength = int(trainLength*transient_quota)
-
-        #define states' matrix
-        X = np.zeros((1+self.n_input+self.n_reservoir,trainLength-skipLength))
-
-        self._x = np.zeros((self.n_reservoir,1))
+    def propagate(self, inputData, trainLength, skipLength, verbose):
+        # define states' matrix
+        X = np.zeros((1 + self.n_input + self.n_reservoir, trainLength - skipLength))
 
         if (verbose > 0):
             bar = progressbar.ProgressBar(max_value=trainLength, redirect_stdout=True, poll_interval=0.0001)
@@ -75,6 +60,25 @@ class ESN(BaseESN):
 
         if (verbose > 0):
             bar.finish()
+
+        return X
+
+
+    """
+        Fits the ESN so that by applying the inputData the outputData will be produced.
+    """
+    def fit(self, inputData, outputData, transient_quota=0.05, verbose=0):
+        #check the input data
+        if inputData.shape[0] != outputData.shape[0]:
+            raise ValueError("Amount of input and output datasets is not equal - {0} != {1}".format(inputData.shape[0], outputData.shape[0]))
+
+        trainLength = inputData.shape[0]
+
+        skipLength = int(trainLength*transient_quota)
+
+        self._x = np.zeros((self.n_reservoir,1))
+
+        X = self.propagate(inputData, trainLength, skipLength, verbose)
 
         #define the target values
         Y_target = self.out_inverse_activation(outputData).T[:,skipLength:]

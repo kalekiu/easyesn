@@ -33,8 +33,7 @@ class BaseESN(object):
             if len(input_scaling) != self.n_input:
                 raise ValueError("Dimension of input_scaling ({0}) does not match the input data dimension ({1})".format(len(input_scaling), n_input))
 
-        self._input_scaling_matrix = np.diag(input_scaling)
-        self._expanded_input_scaling_matrix = np.diag(np.vstack((1.0, input_scaling.reshape(-1, 1))).flatten())
+        self._expanded_input_scaling = np.vstack((1.0, input_scaling.reshape(-1,1)))
 
         self.out_activation = out_activation
         self.out_inverse_activation = out_inverse_activation
@@ -140,7 +139,7 @@ class BaseESN(object):
         #check of the user is really using one of the internal methods, or wants to create W by his own
         if (weight_generation != 'custom'):
             #random weight matrix for the input from -0.5 to 0.5
-            self._W_input = np.random.rand(self.n_reservoir, 1+self.n_input)-0.5
+            self._W_input = np.random.rand(self.n_reservoir, 1 + self.n_input)-0.5
 
             #scale the input_density to prevent saturated reservoir nodes
             if (self.input_density != 1.0):
@@ -152,11 +151,11 @@ class BaseESN(object):
 
                 self._W_input[input_topology] = 0.0
 
-            self._W_input = self._W_input.dot(self._expanded_input_scaling_matrix)
+            self._W_input = self._W_input * self._expanded_input_scaling
 
         #create the optional feedback matrix
         if feedback:
-            self._W_feedback = np.random.rand(self.n_reservoir, 1+self.n_output) - 0.5
+            self._W_feedback = np.random.rand(self.n_reservoir, 1 + self.n_output) - 0.5
 
     """
         Updates the inner states. Returns the UNSCALED but reshaped input of this step.
