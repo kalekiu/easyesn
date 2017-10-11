@@ -47,3 +47,7 @@ def calculate_esn_mi_input_scaling(input_data, output_data):
     scaling = mi / np.max(mi)
 
     return scaling
+
+
+def loss(prediction, target):
+    return np.mean( ( prediction - target ) ** 2 )

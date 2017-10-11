@@ -1,10 +1,11 @@
 #from numpy import *
 from . import helper as hlp
+from . import backend as B
 
 class Optimizer:
 
     def __init__(self, backend):
-        self.backend = backend
+        B = backend
 
 
 
@@ -12,32 +13,32 @@ class Optimizer:
 
     # f`(X)
     def activationDerivation(self, X):
-        return 4 / (2 + self.backend.exp(2 * X) + self.backend.exp(-2 * X))
+        return 4 / (2 + B.exp(2 * X) + B.exp(-2 * X))
 
     # del x / del alpha
     def derivationForLeakingRate(self, reservoir, oldDerivative, u, x):
         a = reservoir.leakingRate
         X = reservoir.X(x, u)
-        return (1-a) * oldDerivative - x + reservoir.f(X) + a * self.activationDerivation(X) * self.backend.dot(reservoir.W, oldDerivative )
+        return (1-a) * oldDerivative - x + reservoir.f(X) + a * self.activationDerivation(X) * B.dot(reservoir.W, oldDerivative )
 
     # del x / del rho
     def derivationForSpectralRadius(self, reservoir, W_uniform, oldDerivative, u, x):
         a = reservoir.leakingRate
         X = reservoir.X(x, u)
-        return (1-a) * oldDerivative + a * self.activationDerivation(X) * ( self.backend.dot(reservoir.W, oldDerivative) + self.backend.dot(W_uniform, x) )
+        return (1-a) * oldDerivative + a * self.activationDerivation(X) * ( B.dot(reservoir.W, oldDerivative) + B.dot(W_uniform, x) )
 
     # del x / del s_in
     def derivationForInputScaling(self, reservoir, W_in_uniform, oldDerivative, u, x):
         a = reservoir.leakingRate
         X = reservoir.X(x, u)
-        u = self.backend.vstack((1,u))
-        return (1-a)  * oldDerivative + a * self.activationDerivation(X) * ( self.backend.dot(reservoir.W, oldDerivative) + self.backend.dot(W_in_uniform, u) )
+        u = B.vstack((1,u))
+        return (1-a)  * oldDerivative + a * self.activationDerivation(X) * ( B.dot(reservoir.W, oldDerivative) + B.dot(W_in_uniform, u) )
 
     # del W_out / del beta
     def derivationForPenalty(self, reservoir, Y, X, penalty):
         X_T = X.T
-        term2 = self.backend.linalg.inv( self.backend.dot( X, X_T ) + penalty * self.backend.eye(1 + reservoir.n_input + reservoir.n_reservoir) )
-        return - self.backend.dot( self.backend.dot( Y, X_T ), self.backend.dot( term2, term2 ) )
+        term2 = B.linalg.inv( B.dot( X, X_T ) + penalty * B.eye(1 + reservoir.n_input + reservoir.n_reservoir) )
+        return - B.dot( B.dot( Y, X_T ), B.dot( term2, term2 ) )
 
     # del W_out / del (alpha, rho or s_in)
     def derivationWoutForP(self, reservoir, Y, X, XPrime, penalty):
@@ -59,10 +60,10 @@ class Optimizer:
         #
         # return dot( Y, term1 + term2)
 
-        term1 = self.backend.linalg.inv(self.backend.dot(X,X_T) + penalty*self.backend.eye(1 + reservoir.n_input + reservoir.n_reservoir))
-        term2 = self.backend.dot( XPrime, X_T) + self.backend.dot( X, XPrime_T )
+        term1 = B.linalg.inv(B.dot(X,X_T) + penalty*B.eye(1 + reservoir.n_input + reservoir.n_reservoir))
+        term2 = B.dot( XPrime, X_T) + B.dot( X, XPrime_T )
 
-        return self.backend.dot( Y, self.backend.dot( XPrime_T, term1 ) - self.backend.dot( self.backend.dot( self.backend.dot( X_T, term1 ), term2 ), term1 ) )
+        return B.dot( Y, B.dot( XPrime_T, term1 ) - B.dot( B.dot( B.dot( X_T, term1 ), term2 ), term1 ) )
 
 
     ####################################################################################################################################################
@@ -81,14 +82,14 @@ class Optimizer:
         validationLosses = list()
 
         # initializations for arrays which collect all the gradients of the error of the single time steps, which get add at the end
-        srGradients = self.backend.zeros(trainLength - reservoir.transientTime)
-        lrGradients = self.backend.zeros(trainLength - reservoir.transientTime)
-        isGradients = self.backend.zeros(trainLength - reservoir.transientTime)
+        srGradients = B.zeros(trainLength - reservoir.transientTime)
+        lrGradients = B.zeros(trainLength - reservoir.transientTime)
+        isGradients = B.zeros(trainLength - reservoir.transientTime)
 
         # collecting the single derivatives  - > this is the derivation of design matrix when filled
-        srGradientsMatrix = self.backend.zeros((reservoir.n_reservoir + reservoir.n_input + 1, trainLength - reservoir.transientTime))
-        lrGradientsMatrix = self.backend.zeros((reservoir.n_reservoir + reservoir.n_input + 1, trainLength - reservoir.transientTime))
-        isGradientsMatrix = self.backend.zeros((reservoir.n_reservoir + reservoir.n_input + 1, trainLength - reservoir.transientTime))
+        srGradientsMatrix = B.zeros((reservoir.n_reservoir + reservoir.n_input + 1, trainLength - reservoir.transientTime))
+        lrGradientsMatrix = B.zeros((reservoir.n_reservoir + reservoir.n_input + 1, trainLength - reservoir.transientTime))
+        isGradientsMatrix = B.zeros((reservoir.n_reservoir + reservoir.n_input + 1, trainLength - reservoir.transientTime))
 
         # initialize fallback Parameter
         oldSR = reservoir.spectralRadius
@@ -106,12 +107,12 @@ class Optimizer:
             print("###################### Start epoch: " + str(epoch) + " ##########################")
 
             # initialize del x / del (rho, alpha, s_in) and reservoir state itself
-            derivationSpectralRadius = self.backend.zeros((reservoir.n_reservoir, 1))
-            derivationLeakingRate = self.backend.zeros((reservoir.n_reservoir, 1))
-            derivationInputScaling = self.backend.zeros((reservoir.n_reservoir, 1))
+            derivationSpectralRadius = B.zeros((reservoir.n_reservoir, 1))
+            derivationLeakingRate = B.zeros((reservoir.n_reservoir, 1))
+            derivationInputScaling = B.zeros((reservoir.n_reservoir, 1))
 
             # initialize the neuron states new
-            x = self.backend.zeros((reservoir.n_reservoir, 1))
+            x = B.zeros((reservoir.n_reservoir, 1))
 
             # go thorugh the train length (e.g. the time, on which W_out gets calculated)
             for t, u in enumerate(trainInputs):
@@ -126,9 +127,9 @@ class Optimizer:
                 if t >= reservoir.transientTime:
 
                     # concatenate with zeros (for the derivatives of the input and the 1, which are always 0)
-                    derivationConcatinationSpectralRadius = self.backend.concatenate( (self.backend.zeros(reservoir.n_input + 1), derivationSpectralRadius[:, 0]), axis=0)
-                    derivationConcatinationLeakingRate = self.backend.concatenate( (self.backend.zeros(reservoir.n_input + 1), derivationLeakingRate[:, 0]), axis=0)
-                    derivationConcatinationInputScaling = self.backend.concatenate( (self.backend.zeros(reservoir.n_input + 1), derivationInputScaling[:, 0]), axis=0)
+                    derivationConcatinationSpectralRadius = B.concatenate( (B.zeros(reservoir.n_input + 1), derivationSpectralRadius[:, 0]), axis=0)
+                    derivationConcatinationLeakingRate = B.concatenate( (B.zeros(reservoir.n_input + 1), derivationLeakingRate[:, 0]), axis=0)
+                    derivationConcatinationInputScaling = B.concatenate( (B.zeros(reservoir.n_input + 1), derivationInputScaling[:, 0]), axis=0)
 
                     # add to matrix
                     srGradientsMatrix[:, t - reservoir.transientTime] = derivationConcatinationSpectralRadius
@@ -141,23 +142,24 @@ class Optimizer:
             WoutPrimeIS = self.derivationWoutForP(reservoir, Ytarget, reservoir._X, isGradientsMatrix, penalty)
 
             # reinitialize the states
-            x = self.backend.zeros((reservoir.n_reservoir, 1))
+            x = B.zeros((reservoir.n_reservoir, 1))
 
             # go through the train time again, and this time, calculate del error / del (rho, alpha, s_in) based on del W_out and the single derivatives
             for t, u in enumerate(trainInputs):
                 u = u.reshape(-1, 1)
-                x = reservoir.updateNeuronState(x, u)
+                reservoir.update(u)
+                x = reservoir._x
                 if t >= reservoir.transientTime:
 
                     # calculate error at given time step
-                    error = (trainTargets[t] - self.backend.dot( reservoir.W_out, self.backend.vstack((1, u, x)) ) ).T
+                    error = (trainTargets[t] - B.dot( reservoir.W_out, B.vstack((1, u, x)) ) ).T
 
                     # calculate gradients
-                    gradientSR = self.backend.dot(-error, self.backend.dot(WoutPrimeSR, self.backend.vstack((1, u, x))[:, 0]) + self.backend.dot(reservoir.W_out, srGradientsMatrix[:, t - reservoir.transientTime]))
+                    gradientSR = B.dot(-error, B.dot(WoutPrimeSR, B.vstack((1, u, x))[:, 0]) + B.dot(reservoir.W_out, srGradientsMatrix[:, t - reservoir.transientTime]))
                     srGradients[t - reservoir.transientTime] = gradientSR
-                    gradientLR = self.backend.dot(-error, self.backend.dot(WoutPrimeLR, self.backend.vstack((1, u, x))[:, 0]) + self.backend.dot(reservoir.W_out, lrGradientsMatrix[:, t - reservoir.transientTime]))
+                    gradientLR = B.dot(-error, B.dot(WoutPrimeLR, B.vstack((1, u, x))[:, 0]) + B.dot(reservoir.W_out, lrGradientsMatrix[:, t - reservoir.transientTime]))
                     lrGradients[t - reservoir.transientTime] = gradientLR
-                    gradientIS = self.backend.dot(-error, self.backend.dot(WoutPrimeIS, self.backend.vstack((1, u, x))[:, 0]) + self.backend.dot(reservoir.W_out, isGradientsMatrix[:, t - reservoir.transientTime]))
+                    gradientIS = B.dot(-error, B.dot(WoutPrimeIS, B.vstack((1, u, x))[:, 0]) + B.dot(reservoir.W_out, isGradientsMatrix[:, t - reservoir.transientTime]))
                     isGradients[t - reservoir.transientTime] = gradientIS
 
             # sum up the gradients del error / del (rho, alpha, s_in) to get final gradient
@@ -166,7 +168,7 @@ class Optimizer:
             gradientIS = sum(isGradients)
 
             # normalize gradients to length 1
-            gradientVectorLength = self.backend.sqrt(gradientSR ** 2 + gradientLR ** 2 + gradientIS ** 2)
+            gradientVectorLength = B.sqrt(gradientSR ** 2 + gradientLR ** 2 + gradientIS ** 2)
 
             gradientSR /= gradientVectorLength
             gradientLR /= gradientVectorLength
@@ -218,14 +220,14 @@ class Optimizer:
         validationLosses = list()
 
         # initializations for arrays which collect all the gradients of the error of the single time steps, which get add at the end
-        srGradients = self.backend.zeros(optimizationLength)
-        lrGradients = self.backend.zeros(optimizationLength)
-        isGradients = self.backend.zeros(optimizationLength)
+        srGradients = B.zeros(optimizationLength)
+        lrGradients = B.zeros(optimizationLength)
+        isGradients = B.zeros(optimizationLength)
 
         # collecting the single derivatives  - > this is the derivation of design matrix when filled
-        srGradientsMatrix = self.backend.zeros((reservoir.n_reservoir + reservoir.n_input + 1, trainLength - reservoir.transientTime))
-        lrGradientsMatrix = self.backend.zeros((reservoir.n_reservoir + reservoir.n_input + 1, trainLength - reservoir.transientTime))
-        isGradientsMatrix = self.backend.zeros((reservoir.n_reservoir + reservoir.n_input + 1, trainLength - reservoir.transientTime))
+        srGradientsMatrix = B.zeros((reservoir.n_reservoir + reservoir.n_input + 1, trainLength - reservoir.transientTime))
+        lrGradientsMatrix = B.zeros((reservoir.n_reservoir + reservoir.n_input + 1, trainLength - reservoir.transientTime))
+        isGradientsMatrix = B.zeros((reservoir.n_reservoir + reservoir.n_input + 1, trainLength - reservoir.transientTime))
 
         # initialize variables for the "when the error goes up, go back and divide learning rate by 2" mechanism
         oldSR = reservoir.spectralRadius
@@ -244,10 +246,10 @@ class Optimizer:
             print("###################### Start epoch: " + str(epoch) + " ##########################")
 
             # initialize del x / del (rho, alpha, s_in) and reservoir state itself
-            derivationSpectralRadius = self.backend.zeros((reservoir.n_reservoir, 1))
-            derivationLeakingRate = self.backend.zeros((reservoir.n_reservoir, 1))
-            derivationInputScaling = self.backend.zeros((reservoir.n_reservoir, 1))
-            x = self.backend.zeros((reservoir.n_reservoir, 1))
+            derivationSpectralRadius = B.zeros((reservoir.n_reservoir, 1))
+            derivationLeakingRate = B.zeros((reservoir.n_reservoir, 1))
+            derivationInputScaling = B.zeros((reservoir.n_reservoir, 1))
+            x = B.zeros((reservoir.n_reservoir, 1))
 
             # go thorugh the train length (e.g. the time, on which W_out gets calculated)
             for t, u in enumerate(trainInputs):
@@ -262,9 +264,9 @@ class Optimizer:
                 if t >= reservoir.transientTime:
 
                     # concatenate with zeros (for the derivatives of the input and the 1, which are always 0)
-                    srGradientsMatrix[:, t - reservoir.transientTime] = self.backend.concatenate( (self.backend.zeros(reservoir.n_input + 1), derivationSpectralRadius[:, 0]), axis=0)
-                    lrGradientsMatrix[:, t - reservoir.transientTime] = self.backend.concatenate( (self.backend.zeros(reservoir.n_input + 1), derivationLeakingRate[:, 0]), axis=0)
-                    isGradientsMatrix[:, t - reservoir.transientTime] = self.backend.concatenate( (self.backend.zeros(reservoir.n_input + 1), derivationInputScaling[:, 0]), axis=0)
+                    srGradientsMatrix[:, t - reservoir.transientTime] = B.concatenate( (B.zeros(reservoir.n_input + 1), derivationSpectralRadius[:, 0]), axis=0)
+                    lrGradientsMatrix[:, t - reservoir.transientTime] = B.concatenate( (B.zeros(reservoir.n_input + 1), derivationLeakingRate[:, 0]), axis=0)
+                    isGradientsMatrix[:, t - reservoir.transientTime] = B.concatenate( (B.zeros(reservoir.n_input + 1), derivationInputScaling[:, 0]), axis=0)
 
             # add to matrix
             WoutPrimeSR = self.derivationWoutForP(reservoir, Ytarget, reservoir._X, srGradientsMatrix, penalty)
@@ -275,10 +277,11 @@ class Optimizer:
             for t, u in enumerate(validationInputs):
                 u = u.reshape(-1, 1)
                 oldx = x
-                x = reservoir.updateNeuronState(x, u)
+                reservoir.update(u)
+                x = reservoir._x
 
                 # calculate error at given time step
-                error = (validationTargets[t] - self.backend.dot( reservoir.W_out, self.backend.vstack((1, u, x)) ) ).T
+                error = (validationTargets[t] - B.dot( reservoir.W_out, B.vstack((1, u, x)) ) ).T
 
                 # calculate del x / del (rho, alpha, s_in)
                 derivationSpectralRadius = self.derivationForSpectralRadius(reservoir, W_uniform, derivationSpectralRadius, u, oldx)
@@ -286,16 +289,16 @@ class Optimizer:
                 derivationInputScaling = self.derivationForInputScaling(reservoir, W_in_uniform, derivationInputScaling, u, oldx)
 
                 # concatenate derivations with 0
-                derivationConcatinationSpectralRadius = self.backend.concatenate( (self.backend.zeros(reservoir.n_input + 1), derivationSpectralRadius[:, 0]), axis=0)
-                derivationConcatinationLeakingRate = self.backend.concatenate( (self.backend.zeros(reservoir.n_input + 1), derivationLeakingRate[:, 0]), axis=0)
-                derivationConcatinationInputScaling = self.backend.concatenate( (self.backend.zeros(reservoir.n_input + 1), derivationInputScaling[:, 0]), axis=0)
+                derivationConcatinationSpectralRadius = B.concatenate( (B.zeros(reservoir.n_input + 1), derivationSpectralRadius[:, 0]), axis=0)
+                derivationConcatinationLeakingRate = B.concatenate( (B.zeros(reservoir.n_input + 1), derivationLeakingRate[:, 0]), axis=0)
+                derivationConcatinationInputScaling = B.concatenate( (B.zeros(reservoir.n_input + 1), derivationInputScaling[:, 0]), axis=0)
 
                 # calculate gradients
-                gradientSR = self.backend.dot(-error, self.backend.dot(reservoir.W_out, derivationConcatinationSpectralRadius) + self.backend.dot(WoutPrimeSR, self.backend.vstack((1, u, x))[:, 0]))
+                gradientSR = B.dot(-error, B.dot(reservoir.W_out, derivationConcatinationSpectralRadius) + B.dot(WoutPrimeSR, B.vstack((1, u, x))[:, 0]))
                 srGradients[t] = gradientSR
-                gradientLR = self.backend.dot(-error, self.backend.dot(reservoir.W_out, derivationConcatinationLeakingRate) + self.backend.dot(WoutPrimeLR, self.backend.vstack( (1, u, x))[:, 0]))
+                gradientLR = B.dot(-error, B.dot(reservoir.W_out, derivationConcatinationLeakingRate) + B.dot(WoutPrimeLR, B.vstack( (1, u, x))[:, 0]))
                 lrGradients[t] = gradientLR
-                gradientIS = self.backend.dot(-error, self.backend.dot(reservoir.W_out, derivationConcatinationInputScaling) + self.backend.dot(WoutPrimeIS, self.backend.vstack( (1, u, x))[:, 0]))
+                gradientIS = B.dot(-error, B.dot(reservoir.W_out, derivationConcatinationInputScaling) + B.dot(WoutPrimeIS, B.vstack( (1, u, x))[:, 0]))
                 isGradients[t] = gradientIS
 
             # sum up the gradients del error / del (rho, alpha, s_in) to get final gradient
@@ -304,7 +307,7 @@ class Optimizer:
             gradientIS = sum(isGradients)
 
             # normalize length of gradient to 1
-            gradientVectorLength = self.backend.sqrt(gradientSR ** 2 + gradientLR ** 2 + gradientIS ** 2)
+            gradientVectorLength = B.sqrt(gradientSR ** 2 + gradientLR ** 2 + gradientIS ** 2)
 
             gradientSR /= gradientVectorLength
             gradientLR /= gradientVectorLength
@@ -356,19 +359,20 @@ class Optimizer:
         validationLosses = list()
         penalties = list()
 
-        penaltyDerivatives = self.backend.zeros(optimizationLength)
+        penaltyDerivatives = B.zeros(optimizationLength)
         oldPenalty = penalty
 
         reservoir.fit(trainInputs, trainTargets)
         oldLoss = hlp.loss(reservoir.predict(validationInputs), validationTargets)
 
-        evaluationEchoFunction = self.backend.zeros((1 + reservoir.n_reservoir + reservoir.n_input, optimizationLength))
+        evaluationEchoFunction = B.zeros((1 + reservoir.n_reservoir + reservoir.n_input, optimizationLength))
         x = reservoir.x
 
         for t, u in enumerate(validationInputs):
             u = u.reshape(-1, 1)
-            x = reservoir.updateNeuronState(x, u)
-            evaluationEchoFunction[:, t] = self.backend.vstack((1, u, x)).squeeze()
+            reservoir.update(u)
+            x = reservoir._x
+            evaluationEchoFunction[:, t] = B.vstack((1, u, x)).squeeze()
 
 
         for epoch in range(epochs):
@@ -377,13 +381,13 @@ class Optimizer:
             penaltyDerivative = self.derivationForPenalty(reservoir, Ytarget, reservoir._X, penalty)
 
             for t in range(len(validationInputs)):
-                predictionPoint = self.backend.dot(reservoir.W_out, evaluationEchoFunction[:, t].reshape(-1, 1))
+                predictionPoint = B.dot(reservoir.W_out, evaluationEchoFunction[:, t].reshape(-1, 1))
                 error = (trainTargets[t] - predictionPoint).T
-                penaltyDerivatives[t] = - self.backend.dot(self.backend.dot(error, penaltyDerivative), predictionPoint)
+                penaltyDerivatives[t] = - B.dot(B.dot(error, penaltyDerivative), predictionPoint)
 
             penaltyGradient = sum(penaltyDerivatives)
 
-            penaltyGradient = self.backend.sign( penaltyGradient )
+            penaltyGradient = B.sign( penaltyGradient )
 
             penalty = penalty - learningRate * penaltyGradient
 
