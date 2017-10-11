@@ -6,6 +6,8 @@ import numpy as np
 import numpy.random as rnd
 from .BaseESN import BaseESN
 
+from . import backend as B
+
 from sklearn.linear_model import Ridge
 from sklearn.svm import SVR
 from sklearn.linear_model import LogisticRegression
@@ -44,7 +46,7 @@ class ESN(BaseESN):
 
     def propagate(self, inputData, trainLength, skipLength, verbose):
         # define states' matrix
-        X = np.zeros((1 + self.n_input + self.n_reservoir, trainLength - skipLength))
+        X = B.zeros((1 + self.n_input + self.n_reservoir, trainLength - skipLength))
 
         if (verbose > 0):
             bar = progressbar.ProgressBar(max_value=trainLength, redirect_stdout=True, poll_interval=0.0001)
@@ -54,7 +56,7 @@ class ESN(BaseESN):
             u = super(ESN, self).update(inputData[t])
             if (t >= skipLength):
                 #add valueset to the states' matrix
-                X[:,t-skipLength] = np.vstack((self.output_bias, self.output_input_scaling*u, self._x))[:,0]
+                X[:,t-skipLength] = B.vstack((self.output_bias, self.output_input_scaling*u, self._x))[:,0]
             if (verbose > 0):
                 bar.update(t)
 
@@ -76,7 +78,7 @@ class ESN(BaseESN):
 
         skipLength = int(trainLength*transient_quota)
 
-        self._x = np.zeros((self.n_reservoir,1))
+        self._x = B.zeros((self.n_reservoir,1))
 
         X = self.propagate(inputData, trainLength, skipLength, verbose)
 
@@ -84,13 +86,13 @@ class ESN(BaseESN):
         Y_target = self.out_inverse_activation(outputData).T[:,skipLength:]
 
         if (self._solver == "pinv"):
-            self._W_out = np.dot(Y_target, np.linalg.pinv(X))
+            self._W_out = B.dot(Y_target, B.pinv(X))
 
             #calculate the training prediction now
-            train_prediction = self.out_activation((np.dot(self._W_out, X)).T)
+            train_prediction = self.out_activation((B.dot(self._W_out, X)).T)
 
         elif (self._solver == "lsqr"):
-            self._W_out = np.dot(np.dot(Y_target, X.T),np.linalg.inv(np.dot(X,X.T) + self._regression_parameters[0]*np.identity(1+self.n_input+self.n_reservoir)))
+            self._W_out = B.dot(B.dot(Y_target, X.T),B.inv(B.dot(X,X.T) + self._regression_parameters[0]*B.identity(1+self.n_input+self.n_reservoir)))
 
             """
                 #alternative represantation of the equation
@@ -106,7 +108,7 @@ class ESN(BaseESN):
             """
 
             #calculate the training prediction now
-            train_prediction = self.out_activation(np.dot(self._W_out, X).T)
+            train_prediction = self.out_activation(B.dot(self._W_out, X).T)
 
         elif (self._solver in ["sklearn_auto", "sklearn_lsqr", "sklearn_sag", "sklearn_svd"]):
             mode = self._solver[8:]
@@ -130,7 +132,7 @@ class ESN(BaseESN):
         X = None
 
         #calculate the training error now
-        training_error = np.sqrt(np.mean((train_prediction - outputData[skipLength:])**2))
+        training_error = B.sqrt(B.mean((train_prediction - outputData[skipLength:])**2))
         return training_error
 
 
@@ -144,7 +146,7 @@ class ESN(BaseESN):
 
         #let some input run through the ESN to initialize its states from a new starting value
         if (not continuation):
-            self._x = np.zeros(self._x.shape)
+            self._x = B.zeros(self._x.shape)
 
             if (initial_data is not None):
                 for t in range(initial_data.shape[0]):
@@ -152,7 +154,7 @@ class ESN(BaseESN):
 
         predLength = n
 
-        Y = np.zeros((self.n_output,predLength))
+        Y = B.zeros((self.n_output,predLength))
         inputData = initial_input
         for t in range(predLength):
             #update the inner states
@@ -160,9 +162,9 @@ class ESN(BaseESN):
 
             #calculate the prediction using the trained model
             if (self._solver in ["sklearn_auto", "sklearn_lsqr", "sklearn_sag", "sklearn_svd"]):
-                y = self._ridgeSolver.predict(np.vstack((self.output_bias, self.output_input_scaling*u, self._x)).T)
+                y = self._ridgeSolver.predict(B.vstack((self.output_bias, self.output_input_scaling*u, self._x)).T)
             else:
-                y = np.dot(self._W_out, np.vstack((self.output_bias, self.output_input_scaling*u, self._x)))
+                y = B.dot(self._W_out, B.vstack((self.output_bias, self.output_input_scaling*u, self._x)))
 
             #apply the output activation function
             y = self.out_activation(y[:,0])
@@ -178,7 +180,7 @@ class ESN(BaseESN):
     def predict(self, inputData, continuation=True, initial_data=None, update_processor=lambda x:x, verbose=0):
         #let some input run through the ESN to initialize its states from a new starting value
         if (not continuation):
-            self._x = np.zeros(self._x.shape)
+            self._x = B.zeros(self._x.shape)
 
             if (initial_data is not None):
                 for t in range(initial_data.shape[0]):
@@ -186,7 +188,7 @@ class ESN(BaseESN):
 
         predLength = inputData.shape[0]
 
-        Y = np.zeros((self.n_output,predLength))
+        Y = B.zeros((self.n_output,predLength))
 
         if (verbose > 0):
             bar = progressbar.ProgressBar(max_value=predLength, redirect_stdout=True, poll_interval=0.0001)
@@ -198,9 +200,9 @@ class ESN(BaseESN):
 
             #calculate the prediction using the trained model
             if (self._solver in ["sklearn_auto", "sklearn_lsqr", "sklearn_sag", "sklearn_svd", "sklearn_svr"]):
-                y = self._ridgeSolver.predict(np.vstack((self.output_bias, self.output_input_scaling*u, self._x)).T).reshape((-1,1))
+                y = self._ridgeSolver.predict(B.vstack((self.output_bias, self.output_input_scaling*u, self._x)).T).reshape((-1,1))
             else:
-                y = np.dot(self._W_out, np.vstack((self.output_bias, self.output_input_scaling*u, self._x)))
+                y = B.dot(self._W_out, B.vstack((self.output_bias, self.output_input_scaling*u, self._x)))
 
             #apply the output activation function
             Y[:,t] = update_processor(self.out_activation(y[:,0]))

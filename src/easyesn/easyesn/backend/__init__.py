@@ -11,8 +11,7 @@ elif _BACKEND == 'numpy':
 else:
     raise ValueError('Unknown backend: ' + str(_BACKEND))
 
-
-def backend():
+def backendName():
     """Publicly accessible method
     for determining the current backend.
     # Returns

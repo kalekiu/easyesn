@@ -1,39 +1,58 @@
 import numpy as np
-from .backendBase import *
 
-class NumpyBackend(BackendBase):
-	def add(x, y):
-		return np.add(x, y)
+def add(x, y):
+	return np.add(x, y)
 
-	def substract(x, y):
-		return np.substract(x, y)
+def substract(x, y):
+	return np.substract(x, y)
 
-	def dot(x, y):
-		return np.dot(x, y)
+def dot(x, y):
+	return np.dot(x, y)
 
-	def multiply(x, y):
-		return np.multiply(x, y)
+def multiply(x, y):
+	return np.multiply(x, y)
 
-	def eigenval(x):
-		return np.linalg.eig(x)
+def eigenval(x):
+	return np.linalg.eig(x)
 
-	def array(x):
-		return np.array(x)
+def array(x):
+	return np.array(x)
 
-	def inv(x):
-		return np.linalg.inv(x)
+def inv(x):
+	return np.linalg.inv(x)
 
-	def pinv(x):
-		return np.linalg.pinv(x)
+def pinv(x):
+	return np.linalg.pinv(x)
 
-	def arctan(x):
-		return np.arctan(x)
+def arctan(x):
+	return np.arctan(x)
 
-	def vstack(x):
-		return np.vstack(x)
+def vstack(x):
+	return np.vstack(x)
 
-	def abs(x):
-		return np.abs(x)
+def abs(x):
+	return np.abs(x)
 
-	def max(x):
-		return np.max(x)
+def max(x):
+	return np.max(x)
+
+def ones(x):
+	return np.ones(x)
+
+def zeros(x):
+	return np.zeros(x)
+
+def mean(x):
+	return np.mean(x)
+
+def sqrt(x):
+	return np.sqrt(x)
+
+def identity(x):
+	return np.identity(x)
+
+def rand(*x):
+	return np.random.rand(*x)
+
+def power(x, y):
+	return np.power(x, y)
