@@ -150,7 +150,7 @@ class Optimizer:
                 if t >= reservoir.transientTime:
 
                     # calculate error at given time step
-                    error = (trainTargets[t] - reservoir.readOut(u, x)).T
+                    error = (trainTargets[t] - self.backend.dot( reservoir.W_out, self.backend.vstack((1, u, x)) ) ).T
 
                     # calculate gradients
                     gradientSR = self.backend.dot(-error, self.backend.dot(WoutPrimeSR, self.backend.vstack((1, u, x))[:, 0]) + self.backend.dot(reservoir.W_out, srGradientsMatrix[:, t - reservoir.transientTime]))
@@ -234,7 +234,7 @@ class Optimizer:
 
         # initialize self.designMatrix and self.W_out
         reservoir.fit(trainInputs, trainTargets)
-        oldLoss = hlp.loss( reservoir.predict(validation_input), evaTargets )
+        oldLoss = hlp.loss( reservoir.predict(validationInputs), validationTargets )
 
         # Calculate uniform matrices
         W_uniform = reservoir.W / reservoir.spectralRadius
@@ -278,7 +278,7 @@ class Optimizer:
                 x = reservoir.updateNeuronState(x, u)
 
                 # calculate error at given time step
-                error = (validationTargets[t] - reservoir.readOut(u, x)).T
+                error = (validationTargets[t] - self.backend.dot( reservoir.W_out, self.backend.vstack((1, u, x)) ) ).T
 
                 # calculate del x / del (rho, alpha, s_in)
                 derivationSpectralRadius = self.derivationForSpectralRadius(reservoir, W_uniform, derivationSpectralRadius, u, oldx)
