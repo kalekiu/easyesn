@@ -4,7 +4,7 @@
 
 import numpy as np
 import numpy.random as rnd
-from BaseESN import BaseESN
+from .BaseESN import BaseESN
 
 from sklearn.linear_model import Ridge
 from sklearn.svm import SVR

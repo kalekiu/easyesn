@@ -2,10 +2,16 @@
     Basic implementation of an ESN.
 """
 
+#from __future__ import absolute_import
+
 import numpy as np
 import numpy.random as rnd
 import dill as pickle
 import scipy as sp
+
+#import backend as B
+
+from .backend import backend as B
 
 class BaseESN(object):
     def __init__(self, n_input, n_reservoir, n_output,
@@ -26,14 +32,14 @@ class BaseESN(object):
         self.input_density = input_density
 
         if input_scaling is None:
-            input_scaling = np.ones(n_input)
+            input_scaling = B.ones(n_input)
         if np.isscalar(input_scaling):
-            input_scaling = np.repeat(input_scaling, n_input)
+            input_scaling = B.repeat(input_scaling, n_input)
         else:
             if len(input_scaling) != self.n_input:
                 raise ValueError("Dimension of input_scaling ({0}) does not match the input data dimension ({1})".format(len(input_scaling), n_input))
 
-        self._expanded_input_scaling = np.vstack((1.0, input_scaling.reshape(-1,1)))
+        self._expanded_input_scaling = B.vstack((1.0, input_scaling.reshape(-1,1)))
 
         self.out_activation = out_activation
         self.out_inverse_activation = out_inverse_activation
@@ -77,8 +83,8 @@ class BaseESN(object):
             mask = rnd.rand(self.n_reservoir, self.n_reservoir) > self.sparseness
             self._W[mask] = 0.0
 
-            _W_eigenvalues = np.abs(np.linalg.eig(self._W)[0])
-            self._W *= self.spectral_radius / np.max(_W_eigenvalues)
+            _W_eigenvalues = B.abs(np.linalg.eig(self._W)[0])
+            self._W *= self.spectral_radius / B.max(_W_eigenvalues)
 
         #generation using the SORM technique (see http://ftp.math.uni-rostock.de/pub/preprint/2012/pre12_01.pdf)
         elif weight_generation == "SORM":
@@ -114,23 +120,23 @@ class BaseESN(object):
             #just calculate the largest EV - hopefully this is the right code to do so...
             try:
                 #this is just a good approximation, so this code might fail
-                _W_eigenvalue = np.max(np.abs(sp.sparse.linalg.eigs(self._W, k=1)[0]))
+                _W_eigenvalue = B.max(np.abs(sp.sparse.linalg.eigs(self._W, k=1)[0]))
             except ArpackNoConvergence:
                 #this is the safe fall back method to calculate the EV
-                _W_eigenvalue = np.max(np.abs(sp.linalg.eigvals(self._W)))
-            #_W_eigenvalue = np.max(np.abs(np.linalg.eig(self._W)[0]))
+                _W_eigenvalue = B.max(B.abs(sp.linalg.eigvals(self._W)))
+            #_W_eigenvalue = B.max(B.abs(np.linalg.eig(self._W)[0]))
 
             self._W *= self.spectral_radius / _W_eigenvalue
 
             if verbose:
                 M = self.leak_rate*self._W + (1 - self.leak_rate)*np.identity(n=self._W.shape[0])
-                M_eigenvalue = np.max(np.abs(np.linalg.eig(M)[0]))#np.max(np.abs(sp.sparse.linalg.eigs(M, k=1)[0]))
+                M_eigenvalue = B.max(B.abs(np.linalg.eig(M)[0]))#np.max(np.abs(sp.sparse.linalg.eigs(M, k=1)[0]))
                 print("eff. spectral radius: {0}".format(M_eigenvalue))
 
             #change random signs
             random_signs = np.power(-1, rnd.random_integers(self.n_reservoir, self.n_reservoir))
 
-            self._W = np.multiply(self._W, random_signs)
+            self._W = B.multiply(self._W, random_signs)
         elif weight_generation == 'custom':
             pass
         else:
@@ -165,7 +171,7 @@ class BaseESN(object):
         u = inputData.reshape(self.n_input, 1)
 
         #update the states
-        self._x = (1.0-self.leak_rate)*self._x + self.leak_rate*np.arctan(np.dot(self._W_input, np.vstack((self.bias, u))) + np.dot(self._W, self._x) +
+        self._x = (1.0-self.leak_rate)*self._x + self.leak_rate * B.arctan(B.dot(self._W_input, B.vstack((self.bias, u))) + B.dot(self._W, self._x) +
                                                                           (np.random.rand()-0.5)*self.noise_level)
         self._x = np.asarray(self._x)
 
@@ -182,16 +188,16 @@ class BaseESN(object):
             outputData = outputData.reshape(self.n_output, 1)
 
             #update the states
-            self._x = (1.0-self.leak_rate)*self._x + self.leak_rate*np.arctan(np.dot(self._W_input, np.vstack((self.bias, u))) + np.dot(self._W, self._x) +
-                                                                              np.dot(self._W_feedback, np.vstack((self.output_bias, outputData))) + (np.random.rand()-0.5)*self.noise_level)
+            self._x = (1.0-self.leak_rate)*self._x + self.leak_rate*B.arctan(B.dot(self._W_input, B.vstack((self.bias, u))) + B.dot(self._W, self._x) +
+                                                                              B.dot(self._W_feedback, B.vstack((self.output_bias, outputData))) + (np.random.rand()-0.5)*self.noise_level)
 
             return u
         else:
             #reshape the data
             outputData = outputData.reshape(self.n_output, 1)
             #update the states
-            self._x = (1.0-self.leak_rate)*self._x + self.leak_rate*np.arctan(np.dot(self._W, self._x) + np.dot(self._W_feedback, np.vstack((self.output_bias, outputData))) +
-                                                                              (np.random.rand()-0.5)*self.noise_level)
+            self._x = (1.0-self.leak_rate)*self._x + self.leak_rate*B.arctan(B.dot(self._W, self._x) + B.dot(self._W_feedback, B.vstack((self.output_bias, outputData))) +
+                                                                              (B.random.rand()-0.5)*self.noise_level)
 
             return np.empty((0, 1))
 
