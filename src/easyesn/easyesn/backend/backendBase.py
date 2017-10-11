@@ -24,3 +24,11 @@ class BackendBase(object):
     def pinv(x):
         pass
 
+    def arctan(x):
+        pass
+
+    def vstack(x):
+        pass
+
+    def abs(x):
+        pass

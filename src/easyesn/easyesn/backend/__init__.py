@@ -1,11 +1,13 @@
+import sys
+
 _BACKEND = 'numpy'
 
 if _BACKEND == 'cupy':
     sys.stderr.write('Using CuPy backend\n')
-    from cupyBackend import *
+    from .cupyBackend import *
 elif _BACKEND == 'numpy':
     sys.stderr.write('Using Numpy backend.\n')
-    from numpyBackend import *
+    from .numpyBackend import *
 else:
     raise ValueError('Unknown backend: ' + str(_BACKEND))
 

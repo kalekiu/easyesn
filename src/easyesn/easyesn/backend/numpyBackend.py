@@ -1,7 +1,7 @@
 import numpy as np
-from backendBase import *
+from .backendBase import *
 
-class NumpyBackend(backendBase):
+class NumpyBackend(BackendBase):
 	def add(x, y):
 		return np.add(x, y)
 
@@ -25,3 +25,15 @@ class NumpyBackend(backendBase):
 
 	def pinv(x):
 		return np.linalg.pinv(x)
+
+	def arctan(x):
+		return np.arctan(x)
+
+	def vstack(x):
+		return np.vstack(x)
+
+	def abs(x):
+		return np.abs(x)
+
+	def max(x):
+		return np.max(x)
