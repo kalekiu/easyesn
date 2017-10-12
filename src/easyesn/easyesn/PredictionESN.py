@@ -16,7 +16,7 @@ import progressbar
 
 class PredictionESN(BaseESN):
     def __init__(self, n_input, n_reservoir, n_output,
-                 spectralRadius=1.0, noise_level=0.01, inputScaling=None,
+                 spectralRadius=1.0, noise_level=0.0, inputScaling=None,
                  leakingRate=1.0, sparseness=0.2, random_seed=None,
                  out_activation=lambda x: x, out_inverse_activation=lambda x: x,
                  weight_generation='naive', bias=1.0, output_bias=1.0,
