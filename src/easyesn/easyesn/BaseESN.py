@@ -15,31 +15,33 @@ from . import backend as B
 
 class BaseESN(object):
     def __init__(self, n_input, n_reservoir, n_output,
-                 spectral_radius=1.0, noise_level=0.01, input_scaling=None,
-                 leak_rate=1.0, sparseness=0.2, random_seed=None,
+                 spectralRadius=1.0, noise_level=0.01, inputScaling=None,
+                 leakingRate=1.0, sparseness=0.2, random_seed=None,
                  out_activation=lambda x: x, out_inverse_activation=lambda x: x,
-                 weight_generation='naive', bias=1.0, output_bias=1.0, output_input_scaling=1.0,
-                 feedback=False, scale_input_matrix=False, input_density=1.0):
+                 weight_generation='naive', bias=1.0, output_bias=1.0, outputInputScaling=1.0,
+                 feedback=False, scale_input_matrix=False, input_density=1.0, activation = B.tanh):
 
         self.n_input = n_input
         self.n_reservoir = n_reservoir
         self.n_output = n_output
 
-        self.spectral_radius = spectral_radius
+        self._spectralRadius = spectralRadius
         self.noise_level = noise_level
         self.sparseness = sparseness
-        self.leak_rate = leak_rate
+        self._leakingRate = leakingRate
         self.input_density = input_density
+        self._activation = activation
 
-        if input_scaling is None:
-            input_scaling = B.ones(n_input)
-        if np.isscalar(input_scaling):
-            input_scaling = B.repeat(input_scaling, n_input)
+        if inputScaling is None:
+            self._inputScaling = 1.0
+        if np.isscalar(self._inputScaling):
+            inputScaling = B.ones(n_input) * self._inputScaling
         else:
-            if len(input_scaling) != self.n_input:
-                raise ValueError("Dimension of input_scaling ({0}) does not match the input data dimension ({1})".format(len(input_scaling), n_input))
+            if len(self._inputScaling) != self.n_input:
+                raise ValueError("Dimension of inputScaling ({0}) does not match the input data dimension ({1})".format(len(self._inputScaling), n_input))
+            self._inputScaling = inputScaling
 
-        self._expanded_input_scaling = B.vstack((1.0, input_scaling.reshape(-1,1))).flatten()
+        self._expanded_inputScaling = B.vstack((1.0, inputScaling.reshape(-1,1))).flatten()
 
         self.out_activation = out_activation
         self.out_inverse_activation = out_inverse_activation
@@ -49,8 +51,25 @@ class BaseESN(object):
 
         self.bias = bias
         self.output_bias = output_bias
-        self.output_input_scaling = output_input_scaling
+        self.outputInputScaling = outputInputScaling
         self._create_reservoir(weight_generation, feedback)
+
+
+
+    def setSpectralRadius(self, newSpectralRadius):
+        self._W = self._W * ( newSpectralRadius / self._spectralRadius )
+        self._spectralRadius = newSpectralRadius
+        #TODO numerical instability
+
+    def setLeakingRate(self, newLeakingRate):
+        self._leakingRate = newLeakingRate
+
+    def setInputScaling(self, newInputScaling):
+        inputScaling = B.ones(self.n_input) * self._inputScaling
+        self._expanded_inputScaling = B.vstack((1.0, inputScaling.reshape(-1, 1))).flatten()
+        self._W_input = self._W_input * ( self._expanded_inputScaling / self._inputScaling )
+        self._inputScaling = newInputScaling
+
 
     """
         Generates a random rotation matrix, used in the SORM initilization (see http://ftp.math.uni-rostock.de/pub/preprint/2012/pre12_01.pdf)
@@ -84,7 +103,7 @@ class BaseESN(object):
             self._W[mask] = 0.0
 
             _W_eigenvalues = B.abs(np.linalg.eig(self._W)[0])
-            self._W *= self.spectral_radius / B.max(_W_eigenvalues)
+            self._W *= self._spectralRadius / B.max(_W_eigenvalues)
 
         #generation using the SORM technique (see http://ftp.math.uni-rostock.de/pub/preprint/2012/pre12_01.pdf)
         elif weight_generation == "SORM":
@@ -98,7 +117,7 @@ class BaseESN(object):
                 Q = self.create_random_rotation_matrix()
                 self._W = Q.dot(self._W)
             print(i)
-            self._W *= self.spectral_radius
+            self._W *= self._spectralRadius
 
         #generation using the proposed method of Yildiz
         elif weight_generation == 'advanced':
@@ -126,10 +145,10 @@ class BaseESN(object):
                 _W_eigenvalue = B.max(B.abs(sp.linalg.eigvals(self._W)))
             #_W_eigenvalue = B.max(B.abs(np.linalg.eig(self._W)[0]))
 
-            self._W *= self.spectral_radius / _W_eigenvalue
+            self._W *= self._spectralRadius / _W_eigenvalue
 
             if verbose:
-                M = self.leak_rate*self._W + (1 - self.leak_rate)*np.identity(n=self._W.shape[0])
+                M = self._leakingRate*self._W + (1 - self._leakingRate)*np.identity(n=self._W.shape[0])
                 M_eigenvalue = B.max(B.abs(np.linalg.eig(M)[0]))#np.max(np.abs(sp.sparse.linalg.eigs(M, k=1)[0]))
                 print("eff. spectral radius: {0}".format(M_eigenvalue))
 
@@ -157,12 +176,15 @@ class BaseESN(object):
 
                 self._W_input[input_topology] = 0.0
 
-            self._W_input = self._W_input * self._expanded_input_scaling
+            self._W_input = self._W_input * self._expanded_inputScaling
 
         #create the optional feedback matrix
         if feedback:
             self._W_feedback = B.rand(self.n_reservoir, 1 + self.n_output) - 0.5
 
+
+    def calculateLinearNetworkTransmissions(self, u):
+        return B.dot(self._W_input, B.vstack((self.bias, u))) + B.dot(self._W, self._x)
     """
         Updates the inner states. Returns the UNSCALED but reshaped input of this step.
     """
@@ -171,7 +193,7 @@ class BaseESN(object):
         u = inputData.reshape(self.n_input, 1)
 
         #update the states
-        self._x = (1.0-self.leak_rate)*self._x + self.leak_rate * B.arctan(B.dot(self._W_input, B.vstack((self.bias, u))) + B.dot(self._W, self._x) +
+        self._x = (1.0-self._leakingRate)*self._x + self._leakingRate * self._activation( self.calculateLinearNetworkTransmissions(u)+
                                                                           (B.rand()-0.5)*self.noise_level)
         self._x = np.asarray(self._x)
 
@@ -188,7 +210,7 @@ class BaseESN(object):
             outputData = outputData.reshape(self.n_output, 1)
 
             #update the states
-            self._x = (1.0-self.leak_rate)*self._x + self.leak_rate*B.arctan(B.dot(self._W_input, B.vstack((self.bias, u))) + B.dot(self._W, self._x) +
+            self._x = (1.0-self._leakingRate)*self._x + self._leakingRate*self._activation(B.dot(self._W_input, B.vstack((self.bias, u))) + B.dot(self._W, self._x) +
                                                                               B.dot(self._W_feedback, B.vstack((self.output_bias, outputData))) + (B.rand()-0.5)*self.noise_level)
 
             return u
@@ -196,7 +218,7 @@ class BaseESN(object):
             #reshape the data
             outputData = outputData.reshape(self.n_output, 1)
             #update the states
-            self._x = (1.0-self.leak_rate)*self._x + self.leak_rate*B.arctan(B.dot(self._W, self._x) + B.dot(self._W_feedback, B.vstack((self.output_bias, outputData))) +
+            self._x = (1.0-self._leakingRate)*self._x + self._leakingRate*self._activation(B.dot(self._W, self._x) + B.dot(self._W_feedback, B.vstack((self.output_bias, outputData))) +
                                                                               (B.rand()-0.5)*self.noise_level)
 
             return np.empty((0, 1))

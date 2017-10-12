@@ -14,19 +14,19 @@ from sklearn.linear_model import LogisticRegression
 import progressbar
 
 
-class ESN(BaseESN):
+class PredictionESN(BaseESN):
     def __init__(self, n_input, n_reservoir, n_output,
-                 spectral_radius=1.0, noise_level=0.01, input_scaling=None,
-                 leak_rate=1.0, sparseness=0.2, random_seed=None,
+                 spectralRadius=1.0, noise_level=0.01, inputScaling=None,
+                 leakingRate=1.0, sparseness=0.2, random_seed=None,
                  out_activation=lambda x: x, out_inverse_activation=lambda x: x,
                  weight_generation='naive', bias=1.0, output_bias=1.0,
-                 output_input_scaling=1.0, input_density=1.0, solver='pinv', regression_parameters={}):
+                 outputInputScaling=1.0, input_density=1.0, solver='pinv', regression_parameters={}, activation = B.tanh):
 
-        super(ESN, self).__init__(n_input=n_input, n_reservoir=n_reservoir, n_output=n_output, spectral_radius=spectral_radius,
-                                  noise_level=noise_level, input_scaling=input_scaling, leak_rate=leak_rate, sparseness=sparseness,
+        super(PredictionESN, self).__init__(n_input=n_input, n_reservoir=n_reservoir, n_output=n_output, spectralRadius=spectralRadius,
+                                  noise_level=noise_level, inputScaling=inputScaling, leakingRate=leakingRate, sparseness=sparseness,
                                   random_seed=random_seed, out_activation=out_activation, out_inverse_activation=out_inverse_activation,
-                                  weight_generation=weight_generation, bias=bias, output_bias=output_bias, output_input_scaling=output_input_scaling,
-                                  input_density=input_density)
+                                  weight_generation=weight_generation, bias=bias, output_bias=output_bias, outputInputScaling=outputInputScaling,
+                                  input_density=input_density, activation=activation)
 
 
         self._solver = solver
@@ -44,19 +44,19 @@ class ESN(BaseESN):
                 sklearn_sag
         """
 
-    def propagate(self, inputData, trainLength, skipLength, verbose):
+    def propagate(self, inputData, trainLength, transientTime, verbose):
         # define states' matrix
-        X = B.zeros((1 + self.n_input + self.n_reservoir, trainLength - skipLength))
+        X = B.zeros((1 + self.n_input + self.n_reservoir, trainLength - transientTime))
 
         if (verbose > 0):
             bar = progressbar.ProgressBar(max_value=trainLength, redirect_stdout=True, poll_interval=0.0001)
             bar.update(0)
 
         for t in range(trainLength):
-            u = super(ESN, self).update(inputData[t])
-            if (t >= skipLength):
+            u = super(PredictionESN, self).update(inputData[t])
+            if (t >= transientTime):
                 #add valueset to the states' matrix
-                X[:,t-skipLength] = B.vstack((self.output_bias, self.output_input_scaling*u, self._x))[:,0]
+                X[:,t-transientTime] = B.vstack((self.output_bias, self.outputInputScaling*u, self._x))[:,0]
             if (verbose > 0):
                 bar.update(t)
 
@@ -69,30 +69,32 @@ class ESN(BaseESN):
     """
         Fits the ESN so that by applying the inputData the outputData will be produced.
     """
-    def fit(self, inputData, outputData, transient_quota=0.05, verbose=0):
+    def fit(self, inputData, outputData, transientTime=0, verbose=0):
         #check the input data
         if inputData.shape[0] != outputData.shape[0]:
             raise ValueError("Amount of input and output datasets is not equal - {0} != {1}".format(inputData.shape[0], outputData.shape[0]))
 
         trainLength = inputData.shape[0]
 
-        skipLength = int(trainLength*transient_quota)
+
 
         self._x = B.zeros((self.n_reservoir,1))
 
-        X = self.propagate(inputData, trainLength, skipLength, verbose)
+        self._X = self.propagate(inputData, trainLength, transientTime, verbose)
+
 
         #define the target values
-        Y_target = self.out_inverse_activation(outputData).T[:,skipLength:]
+        Y_target = self.out_inverse_activation(outputData).T[:,transientTime:]
 
         if (self._solver == "pinv"):
-            self._W_out = B.dot(Y_target, B.pinv(X))
+            self._W_out = B.dot(Y_target, B.pinv(self._X))
 
             #calculate the training prediction now
-            train_prediction = self.out_activation((B.dot(self._W_out, X)).T)
+            train_prediction = self.out_activation((B.dot(self._W_out, self._X)).T)
 
         elif (self._solver == "lsqr"):
-            self._W_out = B.dot(B.dot(Y_target, X.T),B.inv(B.dot(X,X.T) + self._regression_parameters[0]*B.identity(1+self.n_input+self.n_reservoir)))
+            X_T = self._X.T
+            self._W_out = B.dot(B.dot(Y_target, X_T),B.inv(B.dot(self._X,X_T) + self._regression_parameters[0]*B.identity(1+self.n_input+self.n_reservoir)))
 
             """
                 #alternative represantation of the equation
@@ -108,7 +110,7 @@ class ESN(BaseESN):
             """
 
             #calculate the training prediction now
-            train_prediction = self.out_activation(B.dot(self._W_out, X).T)
+            train_prediction = self.out_activation(B.dot(self._W_out, self._X).T)
 
         elif (self._solver in ["sklearn_auto", "sklearn_lsqr", "sklearn_sag", "sklearn_svd"]):
             mode = self._solver[8:]
@@ -116,23 +118,21 @@ class ESN(BaseESN):
             params["solver"] = mode
             self._ridgeSolver = Ridge(**params)
 
-            self._ridgeSolver.fit(X.T, Y_target.T)
+            self._ridgeSolver.fit(self._X.T, Y_target.T)
 
             #calculate the training prediction now
-            train_prediction = self.out_activation(self._ridgeSolver.predict(X.T))
+            train_prediction = self.out_activation(self._ridgeSolver.predict(self._X.T))
 
         elif (self._solver in ["sklearn_svr", "sklearn_svc"]):
             self._ridgeSolver = SVR(**self._regression_parameters)
 
-            self._ridgeSolver.fit(X.T, Y_target.T.ravel())
+            self._ridgeSolver.fit(self._X.T, Y_target.T.ravel())
 
             #calculate the training prediction now
-            train_prediction = self.out_activation(self._ridgeSolver.predict(X.T))
-
-        X = None
+            train_prediction = self.out_activation(self._ridgeSolver.predict(self._X.T))
 
         #calculate the training error now
-        training_error = B.sqrt(B.mean((train_prediction - outputData[skipLength:])**2))
+        training_error = B.sqrt(B.mean((train_prediction - outputData[transientTime:])**2))
         return training_error
 
 
@@ -150,7 +150,7 @@ class ESN(BaseESN):
 
             if (initial_data is not None):
                 for t in range(initial_data.shape[0]):
-                    super(ESN, self).update(initial_data[t])
+                    super(PredictionESN, self).update(initial_data[t])
 
         predLength = n
 
@@ -158,13 +158,13 @@ class ESN(BaseESN):
         inputData = initial_input
         for t in range(predLength):
             #update the inner states
-            u = super(ESN, self).update(inputData)
+            u = super(PredictionESN, self).update(inputData)
 
             #calculate the prediction using the trained model
             if (self._solver in ["sklearn_auto", "sklearn_lsqr", "sklearn_sag", "sklearn_svd"]):
-                y = self._ridgeSolver.predict(B.vstack((self.output_bias, self.output_input_scaling*u, self._x)).T)
+                y = self._ridgeSolver.predict(B.vstack((self.output_bias, self.outputInputScaling*u, self._x)).T)
             else:
-                y = B.dot(self._W_out, B.vstack((self.output_bias, self.output_input_scaling*u, self._x)))
+                y = B.dot(self._W_out, B.vstack((self.output_bias, self.outputInputScaling*u, self._x)))
 
             #apply the output activation function
             y = self.out_activation(y[:,0])
@@ -184,7 +184,7 @@ class ESN(BaseESN):
 
             if (initial_data is not None):
                 for t in range(initial_data.shape[0]):
-                    super(ESN, self).update(initial_data[t])
+                    super(PredictionESN, self).update(initial_data[t])
 
         predLength = inputData.shape[0]
 
@@ -196,13 +196,13 @@ class ESN(BaseESN):
 
         for t in range(predLength):
             #update the inner states
-            u = super(ESN, self).update(inputData[t])
+            u = super(PredictionESN, self).update(inputData[t])
 
             #calculate the prediction using the trained model
             if (self._solver in ["sklearn_auto", "sklearn_lsqr", "sklearn_sag", "sklearn_svd", "sklearn_svr"]):
-                y = self._ridgeSolver.predict(B.vstack((self.output_bias, self.output_input_scaling*u, self._x)).T).reshape((-1,1))
+                y = self._ridgeSolver.predict(B.vstack((self.output_bias, self.outputInputScaling*u, self._x)).T).reshape((-1,1))
             else:
-                y = B.dot(self._W_out, B.vstack((self.output_bias, self.output_input_scaling*u, self._x)))
+                y = B.dot(self._W_out, B.vstack((self.output_bias, self.outputInputScaling*u, self._x)))
 
             #apply the output activation function
             Y[:,t] = update_processor(self.out_activation(y[:,0]))

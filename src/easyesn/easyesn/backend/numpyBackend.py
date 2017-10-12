@@ -56,3 +56,15 @@ def rand(*x):
 
 def power(x, y):
 	return np.power(x, y)
+
+def exp(x):
+	return np.exp(x)
+
+def tanh(x):
+	return np.tanh(x)
+
+def concatenate(tuple, axis=0):
+	return np.concatenate(tuple, axis=axis)
+
+def sign(x):
+	return np.sign(x)
