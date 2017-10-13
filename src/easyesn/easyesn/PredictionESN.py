@@ -44,27 +44,6 @@ class PredictionESN(BaseESN):
                 sklearn_sag
         """
 
-    def propagate(self, inputData, trainLength, transientTime, verbose):
-        # define states' matrix
-        X = B.zeros((1 + self.n_input + self.n_reservoir, trainLength - transientTime))
-
-        if (verbose > 0):
-            bar = progressbar.ProgressBar(max_value=trainLength, redirect_stdout=True, poll_interval=0.0001)
-            bar.update(0)
-
-        for t in range(trainLength):
-            u = super(PredictionESN, self).update(inputData[t])
-            if (t >= transientTime):
-                #add valueset to the states' matrix
-                X[:,t-transientTime] = B.vstack((self.output_bias, self.outputInputScaling*u, self._x))[:,0]
-            if (verbose > 0):
-                bar.update(t)
-
-        if (verbose > 0):
-            bar.finish()
-
-        return X
-
 
     """
         Fits the ESN so that by applying the inputData the outputData will be produced.

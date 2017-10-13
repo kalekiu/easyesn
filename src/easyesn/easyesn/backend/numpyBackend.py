@@ -42,6 +42,9 @@ def ones(x):
 def zeros(x):
 	return np.zeros(x)
 
+def empty(x):
+	return np.empty(x)
+
 def mean(x):
 	return np.mean(x)
 
