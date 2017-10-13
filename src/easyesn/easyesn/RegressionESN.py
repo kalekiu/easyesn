@@ -58,14 +58,24 @@ class RegressionESN(BaseESN):
 
         self._x = B.zeros((self.n_reservoir,1))
 
-        self._X = B.zeros((1 + self.n_input + self.n_reservoir, nSequences*(trainLength-transientTime)))
-        Y_target = B.zeros((trainingLength-transientTime, nSequences))
+        self._X = B.zeros((1 + self.n_input + self.n_reservoir, nSequences*(trainingLength-transientTime)))
+        Y_target = B.zeros((self.n_output, (trainingLength-transientTime)*nSequences))
 
-        for n in len(inputData):
+        if verbose > 0:
+            bar = progressbar.ProgressBar(max_value=len(inputData), redirect_stdout=True, poll_interval=0.0001)
+            bar.update(0)
+
+        for n in range(len(inputData)):
             self._x = B.zeros((self.n_reservoir, 1))
-            self._X[:, n*(trainLength-transientTime):(n+1)*(trainLength-transientTime)] = self.propagate(inputData, trainLength, transientTime, verbose)
+            self._X[:, n*(trainingLength-transientTime):(n+1)*(trainingLength-transientTime)] = self.propagate(inputData[n], transientTime, verbose=0)
             #set the target values
-            self.Y_target[:, n] = np.tile(self.out_inverse_activation(outputData), trainLength-transientTime).T
+            Y_target[:, n*(trainingLength-transientTime):(n+1)*(trainingLength-transientTime)] = np.tile(self.out_inverse_activation(outputData[n]), trainingLength-transientTime).T
+
+            if verbose > 0:
+                bar.update(n)
+
+        if verbose > 0:
+            bar.finish()
 
         if (self._solver == "pinv"):
             self._W_out = B.dot(Y_target, B.pinv(self._X))
@@ -122,16 +132,16 @@ class RegressionESN(BaseESN):
     """
         Use the ESN in the predictive mode to predict the output signal by using an input signal.
     """
-    def predict(self, inputData, update_processor=lambda x:x, transientTime, verbose=0):
-        if (len(inputData.shape)) == 1)
+    def predict(self, inputData, update_processor=lambda x:x, transientTime=0, verbose=0):
+        if (len(inputData.shape) == 1):
             inputData = inputData[None, :]
 
         predictionLength = inputData.shape[1]
 
-        Y = B.empty((n, self.n_output))
+        Y = B.empty((inputData.shape[0], self.n_output))
 
         if (verbose > 0):
-            bar = progressbar.ProgressBar(max_value=predLength, redirect_stdout=True, poll_interval=0.0001)
+            bar = progressbar.ProgressBar(max_value=inputData.shape[0], redirect_stdout=True, poll_interval=0.0001)
             bar.update(0)
 
         for n in range(inputData.shape[0]):
@@ -145,11 +155,10 @@ class RegressionESN(BaseESN):
             else:
                 y = B.dot(self._W_out, X)
 
-            Y[n] = np.mean(y, 0)
+            Y[n] = np.mean(y, 1)
 
             if verbose > 0:
-                bar.update(n*(predictionLength-transientTime))
-
+                bar.update(n)
 
         if verbose > 0:
             bar.finish()
