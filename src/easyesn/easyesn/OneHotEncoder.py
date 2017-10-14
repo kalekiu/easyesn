@@ -18,9 +18,9 @@ class OneHotEncoder(object):
 
 
     def transform(self, data):
-        result = np.empty((len(data), 1))
+        result = np.zeros((len(data), len(self.classes)))
         for i in range(len(data)):
-            result[i] = np.searchsorted(self.classes, data[i])
+            result[i, np.searchsorted(self.classes, data[i])] = 1.0
 
         return result
 

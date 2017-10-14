@@ -74,3 +74,6 @@ def concatenate(tuple, axis=0):
 
 def sign(x):
 	return np.sign(x)
+
+def argmax(x, axis):
+    return np.argmax(x, axis)

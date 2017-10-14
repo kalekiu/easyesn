@@ -19,7 +19,7 @@ class ClassificationESN(BaseESN):
     def __init__(self, n_input, n_reservoir, n_classes,
                  spectralRadius=1.0, noiseLevel=0.0, inputScaling=None,
                  leakingRate=1.0, sparseness=0.2, random_seed=None,
-                 out_activation=lambda x: x/(1+B.exp(-x)), out_inverse_activation=lambda x: B.log((x*0.98+0.01)/(0.99-x*0.98)),
+                 out_activation=lambda x: 0.1+0.98*x/(1+B.exp(-x)), out_inverse_activation=lambda x: B.log((x*0.98+0.01)/(0.99-x*0.98)),
                  weight_generation='naive', bias=1.0, output_bias=1.0,
                  outputInputScaling=1.0, input_density=1.0, solver='pinv', regression_parameters={}, activation = B.tanh):
 
@@ -58,9 +58,9 @@ class ClassificationESN(BaseESN):
         nSequences = inputData.shape[0]
         trainingLength = inputData.shape[1]
 
-        if outputData.shape[1] > 1 and outputData.shape[1] != self.n_classes:
+        if outputData.shape[1] > 1 and outputData.shape[1] != self.n_output:
             raise ValueError("The outputData has the shape {0}, which indicates that it is already one hot encoded, " \
-                             "but it does not match the number of classes ({1}) specified in the constructur.".format(outputData.shape, self.n_classes))
+                             "but it does not match the number of classes ({1}) specified in the constructur.".format(outputData.shape, self.n_output))
 
         if outputData.shape[1] == 1 and len(np.unique(outputData)) > 2:
             outputData = self._oneHotEncoder.transform(outputData)
@@ -78,7 +78,7 @@ class ClassificationESN(BaseESN):
             self._x = B.zeros((self.n_reservoir, 1))
             self._X[:, n*(trainingLength-transientTime):(n+1)*(trainingLength-transientTime)] = self.propagate(inputData[n], transientTime, verbose=0)
             #set the target values
-            Y_target[:, n*(trainingLength-transientTime):(n+1)*(trainingLength-transientTime)] = np.tile(self.out_inverse_activation(outputData[n]), trainingLength-transientTime).T
+            Y_target[:, n*(trainingLength-transientTime):(n+1)*(trainingLength-transientTime)] = np.tile(self.out_inverse_activation(outputData[n]), trainingLength-transientTime).reshape(-1, self.n_output).T
 
             if verbose > 0:
                 bar.update(n)
@@ -131,10 +131,10 @@ class ClassificationESN(BaseESN):
             #calculate the training prediction now
             train_prediction = self.out_activation(self._ridgeSolver.predict(self._X.T))
 
-        train_prediction = np.mean(train_prediction, 0)
+        train_prediction = train_prediction[::trainingLength]
 
         #calculate the training error now
-        training_error = B.sqrt(B.mean((train_prediction - outputData.T)**2))
+        training_error = B.sqrt(B.mean((train_prediction - outputData)**2))
         return training_error
 
 
@@ -173,4 +173,7 @@ class ClassificationESN(BaseESN):
             bar.finish()
 
         #return the result
-        return Y
+        result = B.zeros(Y.shape)
+        for i,n in enumerate(B.argmax(Y, 1)): 
+            result[i, n] = 1.0
+        return result
