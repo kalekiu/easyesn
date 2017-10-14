@@ -12,17 +12,18 @@ from sklearn.linear_model import Ridge
 from sklearn.svm import SVR
 from sklearn.linear_model import LogisticRegression
 import progressbar
+from .OneHotEncoder import OneHotEncoder
 
 
-class RegressionESN(BaseESN):
-    def __init__(self, n_input, n_reservoir, n_output,
+class ClassificationESN(BaseESN):
+    def __init__(self, n_input, n_reservoir, n_classes,
                  spectralRadius=1.0, noiseLevel=0.0, inputScaling=None,
                  leakingRate=1.0, sparseness=0.2, random_seed=None,
-                 out_activation=lambda x: x, out_inverse_activation=lambda x: x,
+                 out_activation=lambda x: x/(1+B.exp(-x)), out_inverse_activation=lambda x: B.log((x*0.98+0.01)/(0.99-x*0.98)),
                  weight_generation='naive', bias=1.0, output_bias=1.0,
                  outputInputScaling=1.0, input_density=1.0, solver='pinv', regression_parameters={}, activation = B.tanh):
 
-        super(RegressionESN, self).__init__(n_input=n_input, n_reservoir=n_reservoir, n_output=n_output, spectralRadius=spectralRadius,
+        super(ClassificationESN, self).__init__(n_input=n_input, n_reservoir=n_reservoir, n_output=n_classes, spectralRadius=spectralRadius,
                                   noiseLevel=noiseLevel, inputScaling=inputScaling, leakingRate=leakingRate, sparseness=sparseness,
                                   random_seed=random_seed, out_activation=out_activation, out_inverse_activation=out_inverse_activation,
                                   weight_generation=weight_generation, bias=bias, output_bias=output_bias, outputInputScaling=outputInputScaling,
@@ -31,6 +32,7 @@ class RegressionESN(BaseESN):
 
         self._solver = solver
         self._regression_parameters = regression_parameters
+        self._oneHotEncoder = OneHotEncoder()
 
         """
             allowed values for the solver:
@@ -55,6 +57,13 @@ class RegressionESN(BaseESN):
 
         nSequences = inputData.shape[0]
         trainingLength = inputData.shape[1]
+
+        if outputData.shape[1] > 1 and outputData.shape[1] != self.n_classes:
+            raise ValueError("The outputData has the shape {0}, which indicates that it is already one hot encoded, " \
+                             "but it does not match the number of classes ({1}) specified in the constructur.".format(outputData.shape, self.n_classes))
+
+        if outputData.shape[1] == 1 and len(np.unique(outputData)) > 2:
+            outputData = self._oneHotEncoder.transform(outputData)
 
         self._x = B.zeros((self.n_reservoir,1))
 

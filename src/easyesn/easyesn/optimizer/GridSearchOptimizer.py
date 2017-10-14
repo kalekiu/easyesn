@@ -21,7 +21,7 @@ class GridSearchOptimizer:
         Fits an ESN for each of the wanted hyperparameters and predicts the output.
         The best results parameters will be stores in _best_params.
     """
-    def fit(self, trainingInput, trainingOutput, testingDataSequence, output_postprocessor = lambda x: x, printfreq=1):
+    def fit(self, trainingInput, trainingOutput, validationInput, validationOutput, verbose=1):
         #calculate the length of all permutations of the hyperparameters
         def enumerate_params():
             keys, values = zip(*self.param_grid.items())
@@ -29,38 +29,50 @@ class GridSearchOptimizer:
                 yield dict(zip(keys, row))
         length = sum(1 for x in enumerate_params())
 
-        #iniitialize the progressbar to indicate the progress
-        bar = progressbar.ProgressBar(max_value=length, redirect_stdout=True)
+        if verbose > 0:
+            #initialize the progressbar to indicate the progress
+            bar = progressbar.ProgressBar(max_value=length, redirect_stdout=True)
 
         #store the results here
         results = []
 
-        suc = 0
-        for params in enumerate_params():
+        for index, params in enumerate(enumerate_params()):
             #create and fit the ESN
             esn = self.esnType(**params, **self.fixed_params)
-            training_acc = esn.fit(trainingInput, trainingOutput)
+            trainingAccuricy = esn.fit(trainingInput, trainingOutput)
 
             current_state = esn._x
 
             #evaluate the ESN
-            test_mse = []
-            for (testInput, testOutput) in testingDataSequence:
-                esn._x = current_state
-                out_pred = output_postprocessor(esn.predict(testInput))
-                test_mse.append(np.mean((testOutput - out_pred)**2))
+            validationMSEs = []
 
-            test_mse = np.mean(test_mse)
+            #check whether only one validation sequence is ought to be checked or if the esn has to be validated on multiple sequences
+            if len(validationOutput.shape) == len(trainingInput.shape) + 1:
+                for n in range(validationOutput.shape[0]):
+                    esn._x = current_state
+                    outputPrediction = esn.predict(validationInput[n])
+                    validationMSEs.append(np.mean((validationOutput[n] - outputPrediction)**2))
+            else:
+                 esn._x = current_state
+                 outputPrediction = esn.predict(validationInput)
+                 validationMSEs.append(np.mean((validationOutput - outputPrediction)**2))
 
-            results.append((test_mse, training_acc, params))
+                
 
-            suc += 1
-            bar.update(suc)
+            validationMSE = np.mean(validationMSEs)
+
+            results.append((validationMSE, trainingAccuricy, params))
+            
+            if verbose > 0:
+                bar.update(index)
 
             #print the currently best result every printfreq step
-            if (suc % printfreq == 0):
+            if verbose > 1:
                 res = min(results, key=operator.itemgetter(0))
-                print("\t: " + str(res))
+                print("Current best parameters: \t: " + str(res))
+
+        if verbose > 0:
+            bar.finish()
 
         #determine the best parameters by minimizing the error
         res = min(results, key=operator.itemgetter(0))
@@ -69,4 +81,6 @@ class GridSearchOptimizer:
         self._best_mse = res[0]
 
         return results
+
+
 

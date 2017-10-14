@@ -4,16 +4,29 @@ from . import backend as B
 
 import progressbar
 
-class ESNOptimizer(object):
+class GradientOptimizer(object):
     def _validateReservoir(self):
         if not np.isclose(self._reservoir.noise_level, 0.0):
             raise ValueError("Noise must be set to 0.0 for this optimizer, but it is set to {0}.".format(self._reservoir.noise_level))
         if self._reservoir._solver is not "lsqr":
             raise ValueError("The reservoir's solver must be set to 'lsqr' (Ridge Regression) for this optimizer.")
 
-    def __init__(self, reservoir):
+    def __init__(self, reservoir, learningRate=0.0001, epochs=10, transientTime=0):
         self._reservoir = reservoir
         self._validateReservoir()
+        self.setLearningRate(learningRate)
+        self.epochs = epochs
+        self.transientTime = transientTime
+
+
+    def setLearningRate(self, learningRate):
+        if np.isscala(learningRate):
+            self.learningRates = (learningRate, learningRate, learningRate)
+        else:
+            if len(learningRate) != 3:
+                raise ValueError("LearningRate has to be a scalar or a list/tuple with 3 entries.")
+            else:
+                self.learningRates = learningRate
 
     ####################################################################################################################################################
 
@@ -73,10 +86,17 @@ class ESNOptimizer(object):
     ####################################################################################################################################################
 
 
+    def fit(self, trainingInput, trainingOutput, validationInput, validationOutput, verbose=1):
+        self.optimizeParameterForTrainError(trainingInput, trainingOutput, validationInput, validationOutput, self.epochs, self.transientTime, verbose)
+        self.optimizePenaltyForEvaluationError(trainingInput, trainingOutput, validationInput, validationOutput, self.epochs, self.transientTime, verbose)
+        self.optimizeParameterForValidationError(trainingInput, trainingOutput, validationInput, validationOutput, self.epochs, self.transientTime, verbose)
+
     def optimizeParameterForTrainError(self, trainingInputData, trainingOutputData, validationInputData, validationOutputData,
-                                       learningRate=0.0001, epochs=1, transientTime=None, verbose=1):
+                                       epochs=1, transientTime=None, verbose=1):
 
         self._validateReservoir()
+
+        learningRate = self.learningRates[0]
 
         if not np.isscalar(self._reservoir._inputScaling):
             raise ValueError("Only penalty optimization is supported for a multiple input scalings at the moment. We are working on it.")
@@ -240,10 +260,12 @@ class ESNOptimizer(object):
 
         return (validationLosses, fitLosses, inputScalings, leakingRates, spectralRadiuses)
 
-    def optimizeParameterForEvaluationError(self, trainingInputData, trainingOutputData, validationInputData, validationOutputData,
-                                            optimizationLength, learningRate=0.0001, epochs=1, transientTime=None, verbose=1):
+    def optimizeParameterForValidationError(self, trainingInputData, trainingOutputData, validationInputData, validationOutputData,
+                                            optimizationLength, epochs=1, transientTime=None, verbose=1):
 
         self._validateReservoir()
+
+        learningRate = self.learningRates[1]
 
         if not np.isscalar(self._reservoir._inputScaling):
             raise ValueError("Only penalty optimization is supported for a multiple input scalings at the moment. We are working on it.")
@@ -410,9 +432,11 @@ class ESNOptimizer(object):
         return (validationLosses, fitLosses, inputScalings, leakingRates, spectralRadiuses)
 
     def optimizePenaltyForEvaluationError(self, trainingInputData, trainingOutputData, validationInputData, validationOutputData,
-                                          optimizationLength, learningRate=0.0001, epochs=1, penalty=0.1, transientTime=0, verbose=1):
+                                          optimizationLength, epochs=1, penalty=0.1, transientTime=0, verbose=1):
 
         self._validateReservoir()
+
+        learningRate = self.learningRates[2]
 
         # initializations of arrays:
         if (len(trainingOutputData.shape) == 1):

@@ -63,6 +63,9 @@ def power(x, y):
 def exp(x):
 	return np.exp(x)
 
+def log(x):
+    return np.log(x)
+
 def tanh(x):
 	return np.tanh(x)
 
