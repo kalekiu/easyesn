@@ -23,7 +23,7 @@ class GridSearchOptimizer:
         Fits an ESN for each of the wanted hyperparameters and predicts the output.
         The best results parameters will be stores in _best_params.
     """
-    def fit(self, trainingInput, trainingOutput, validationInput, validationOutput, verbose=1):
+    def fit(self, trainingInput, trainingOutput, validationInput, validationOutput, transientTime, verbose=1):
         #calculate the length of all permutations of the hyperparameters
         def enumerate_params():
             keys, values = zip(*self.param_grid.items())
@@ -41,7 +41,7 @@ class GridSearchOptimizer:
         for index, params in enumerate(enumerate_params()):
             #create and fit the ESN
             esn = self.esnType(**params, **self.fixed_params)
-            trainingAccuricy = esn.fit(trainingInput, trainingOutput)
+            trainingAccuricy = esn.fit(trainingInput, trainingOutput, transientTime=transientTime)
 
             current_state = esn._x
 
@@ -84,6 +84,19 @@ class GridSearchOptimizer:
 
         return results
 
+
+    def findBestHyperparameter(self, esn, N, transientTime, trainInputs, trainTargets, validationInputs, validationTargets, paramDic, verbose=1):
+        for key, values in paramDic:
+            fromParam, tillParam = values
+            valuesToIterateOver = np.linspace(fromParam, tillParam, N)
+            paramDic[key] = valuesToIterateOver
+
+        self.param_grid = paramDic
+
+        return self.fit(trainInputs, trainTargets, validationInputs, validationTargets, verbose=verbose, transientTime=transientTime)
+
+
+
     def plotGrid(self, grid, title, fromParam1, tillParam1, fromParam2, tillParam2, param1, param2, gridHeight=None):
         print(gridHeight)
         plotGrid = np.copy(grid)
@@ -100,17 +113,19 @@ class GridSearchOptimizer:
         plt.ylabel(param2)
         plt.show()
 
+    def setParameter(self, esn, parameter, value):
+        if parameter == "spectralRadius":
+            esn.setSpectralRadius(value)
+        elif parameter == "leakingRate":
+            esn.setLeakingRate(value)
+        elif parameter == "inputScaling":
+            esn.setInputScaling(value)
+        else:
+            raise ValueError(
+                "Hyperparameter {0} does not exist. Choose from either spectralRadius, leakingRate, inputScaling".format(
+                    parameter))
 
     def plotErrorSurface(self, esn, N, transientTime, trainInputs, trainTargets, validationInputs, validationTargets, paramDic, gridHeight = None, verbose=1):
-        def setParameter(esn, parameter, value):
-            if parameter == "Spectral radius":
-                esn.setSpectralRadius(value)
-            elif parameter == "Leaking rate":
-                esn.setLeakingRate(value)
-            elif parameter == "Input scaling":
-                esn.setInputScaling(value)
-            else:
-                raise ValueError("Hyperparameter {0} does not exist.".format(parameter))
 
 
         if len(list(paramDic.keys())) != 2:
@@ -134,10 +149,10 @@ class GridSearchOptimizer:
         widthParam2 = (tillParam2 - fromParam2) / N
         for i in range(N):
             p1 = i * widthParam1 + fromParam1
-            setParameter(esn, param1, p1)
+            self.setParameter(esn, param1, p1)
             for j in range(N):
                 p2 = j * widthParam2 + fromParam2
-                setParameter(esn, param2, p2)
+                self.setParameter(esn, param2, p2)
 
                 trainErrorGrid[i, j] = esn.fit(trainInputs, trainTargets, transientTime=transientTime)
                 validationErrorGrid[i, j] = hlp.loss(esn.predict(validationInputs), validationTargets)
