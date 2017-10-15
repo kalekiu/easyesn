@@ -9,21 +9,23 @@ import progressbar
 from .. import helper as hlp
 import matplotlib.pyplot as plt
 
-"""
-    Performs basic grid search for ESNs in which the parameter space will be searched in discrete steps.
-"""
 class GridSearchOptimizer:
-    def __init__(self, param_grid, fixed_params, esnType):
-        self.esnType = esnType
-        self.param_grid = param_grid
-        self.fixed_params = fixed_params
-
-
     """
+    Performs basic grid search for ESNs in which the parameter space will be searched in discrete steps.
+    """
+
+    def __init__(self, esnType, parametersDictionary={}, fixedParametersDictionary={}):
+        self.esnType = esnType
+        self.parametersDictionary = parametersDictionary
+        self.fixedParametersDictionary = fixedParametersDictionary
+
+
+    def fit(self, trainingInput, trainingOutput, validationInput, validationOutput, transientTime, verbose=1):
+        """
         Fits an ESN for each of the wanted hyperparameters and predicts the output.
         The best results parameters will be stores in _best_params.
-    """
-    def fit(self, trainingInput, trainingOutput, validationInput, validationOutput, transientTime, verbose=1):
+        """
+
         #calculate the length of all permutations of the hyperparameters
         def enumerate_params():
             keys, values = zip(*self.param_grid.items())
@@ -59,8 +61,6 @@ class GridSearchOptimizer:
                  outputPrediction = esn.predict(validationInput)
                  validationMSEs.append(np.mean((validationOutput - outputPrediction)**2))
 
-                
-
             validationMSE = np.mean(validationMSEs)
 
             results.append((validationMSE, trainingAccuricy, params))
@@ -84,52 +84,33 @@ class GridSearchOptimizer:
 
         return results
 
+    def createDenseHyperparameterGrid(self, parameterGridDictionary):
+        """
+        Creates a dense grid of hyperparameters for the settings specified inside `parameterGridDictionary`.
 
-    def findBestHyperparameter(self, esn, N, transientTime, trainInputs, trainTargets, validationInputs, validationTargets, paramDic, verbose=1):
-        for key, values in paramDic:
-            fromParam, tillParam = values
-            valuesToIterateOver = np.linspace(fromParam, tillParam, N)
-            paramDic[key] = valuesToIterateOver
+        Args:
+            parameterGridDictionary (dictionary): Dictionary with strings as keys, which correspond to the name of a hyperparameter of an ESN.
+                                                  The values are tuples (start, end, numberOfSteps) which describe the sampling of each parameter's space.
+        """
+        for key, values in parameterGridDictionary:
+            fromParam, tillParam, steps = values
+            parameterGridDictionary[key] = np.linspace(fromParam, tillParam, steps)
 
-        self.param_grid = paramDic
+        self.parametersDictionary = parameterGridDictionary
 
-        return self.fit(trainInputs, trainTargets, validationInputs, validationTargets, verbose=verbose, transientTime=transientTime)
+    @staticmethod
+    def plotErrorSurface(esn, N, transientTime, trainInputs, trainTargets, validationInputs, validationTargets, paramDic, gridHeight = None, verbose=1):
+        """
 
+        Args:
 
-
-    def plotGrid(self, grid, title, fromParam1, tillParam1, fromParam2, tillParam2, param1, param2, gridHeight=None):
-        print(gridHeight)
-        plotGrid = np.copy(grid)
-        if gridHeight is not None:
-            maxValue = np.min(grid) + np.min(grid) * gridHeight
-            plotGrid[np.where(plotGrid > maxValue)] = maxValue
-            plotGrid[np.where(np.isnan(plotGrid))] = maxValue
-        fig, ax = plt.subplots()
-        mat = plt.imshow(plotGrid, vmin=np.min(plotGrid), vmax=np.max(plotGrid),
-                         extent=[fromParam1, tillParam1, tillParam2, fromParam2])
-        clb = fig.colorbar(mat)
-        plt.title(title)
-        plt.xlabel(param1)
-        plt.ylabel(param2)
-        plt.show()
-
-    def setParameter(self, esn, parameter, value):
-        if parameter == "spectralRadius":
-            esn.setSpectralRadius(value)
-        elif parameter == "leakingRate":
-            esn.setLeakingRate(value)
-        elif parameter == "inputScaling":
-            esn.setInputScaling(value)
-        else:
-            raise ValueError(
-                "Hyperparameter {0} does not exist. Choose from either spectralRadius, leakingRate, inputScaling".format(
-                    parameter))
-
-    def plotErrorSurface(self, esn, N, transientTime, trainInputs, trainTargets, validationInputs, validationTargets, paramDic, gridHeight = None, verbose=1):
-
+        Returns:
+            trainErrorGrid ():
+            validationErrorGrid ():
+        """
 
         if len(list(paramDic.keys())) != 2:
-            raise ValueError("Can only plot error surface of exactly 2 Hyperparameter")
+            raise ValueError("Can only plot error surface of exactly 2 hyperparameters")
 
         if verbose > 0:
             # initialize the progressbar to indicate the progress
@@ -141,7 +122,30 @@ class GridSearchOptimizer:
         param2 = list(paramDic.keys())[1]
         fromParam2, tillParam2 = list(paramDic.values())[1]
 
+        def setParameter(parameter, value):
+            if parameter == "spectralRadius":
+                esn.setSpectralRadius(value)
+            elif parameter == "leakingRate":
+                esn.setLeakingRate(value)
+            elif parameter == "inputScaling":
+                esn.setInputScaling(value)
+            else:
+                raise ValueError("Hyperparameter {0} does not exist. Choose from either spectralRadius, leakingRate, inputScaling".format( parameter))
 
+        def plotGrid(grid, title, fromParam1, tillParam1, fromParam2, tillParam2, param1, param2, gridHeight=None):
+            plotGrid = np.copy(grid)
+            if gridHeight is not None:
+                maxValue = np.min(grid) + np.min(grid) * gridHeight
+                plotGrid[np.where(plotGrid > maxValue)] = maxValue
+                plotGrid[np.where(np.isnan(plotGrid))] = maxValue
+            fig, ax = plt.subplots()
+            mat = plt.imshow(plotGrid, vmin=np.min(plotGrid), vmax=np.max(plotGrid),
+                             extent=[fromParam1, tillParam1, tillParam2, fromParam2])
+            clb = fig.colorbar(mat)
+            plt.title(title)
+            plt.xlabel(param1)
+            plt.ylabel(param2)
+            plt.show()
 
         trainErrorGrid = np.zeros((N, N))
         validationErrorGrid = np.zeros((N, N))
@@ -149,10 +153,10 @@ class GridSearchOptimizer:
         widthParam2 = (tillParam2 - fromParam2) / N
         for i in range(N):
             p1 = i * widthParam1 + fromParam1
-            self.setParameter(esn, param1, p1)
+            setParameter(param1, p1)
             for j in range(N):
                 p2 = j * widthParam2 + fromParam2
-                self.setParameter(esn, param2, p2)
+                setParameter(param2, p2)
 
                 trainErrorGrid[i, j] = esn.fit(trainInputs, trainTargets, transientTime=transientTime)
                 validationErrorGrid[i, j] = hlp.loss(esn.predict(validationInputs), validationTargets)
@@ -160,10 +164,10 @@ class GridSearchOptimizer:
                 if verbose > 0:
                     bar.update(i*N + j)
 
-        self.plotGrid(trainErrorGrid, "Train error", fromParam1, tillParam1, fromParam2, tillParam2, param1, param2, gridHeight)
+        if verbose > 0:
+            bar.finish()
 
-        self.plotGrid(validationErrorGrid, "Validation error", fromParam1, tillParam1, fromParam2, tillParam2, param1, param2, gridHeight)
-
-
+        plotGrid(trainErrorGrid, "Train error", fromParam1, tillParam1, fromParam2, tillParam2, param1, param2, gridHeight)
+        plotGrid(validationErrorGrid, "Validation error", fromParam1, tillParam1, fromParam2, tillParam2, param1, param2, gridHeight)
 
         return trainErrorGrid, validationErrorGrid
