@@ -1,2 +1,2 @@
 from .GradientOptimizer import GradientOptimizer
-from .GridSearchOptimizer import GridSearchOptimizer 
+from .GridSearchOptimizer import GridSearchOptimizer

@@ -1,6 +1,6 @@
 import numpy as np
-from . import helper as hlp
-from . import backend as B
+from .. import helper as hlp
+from .. import backend as B
 
 import progressbar
 
@@ -20,7 +20,7 @@ class GradientOptimizer(object):
 
 
     def setLearningRate(self, learningRate):
-        if np.isscala(learningRate):
+        if np.isscalar(learningRate):
             self.learningRates = (learningRate, learningRate, learningRate)
         else:
             if len(learningRate) != 3:

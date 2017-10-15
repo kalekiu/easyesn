@@ -6,6 +6,8 @@ import numpy as np
 import itertools
 import operator
 import progressbar
+from .. import helper as hlp
+import matplotlib.pyplot as plt
 
 """
     Performs basic grid search for ESNs in which the parameter space will be searched in discrete steps.
@@ -82,5 +84,71 @@ class GridSearchOptimizer:
 
         return results
 
+    def plotGrid(self, grid, title, fromParam1, tillParam1, fromParam2, tillParam2, param1, param2, gridHeight=None):
+        print(gridHeight)
+        plotGrid = np.copy(grid)
+        if gridHeight is not None:
+            maxValue = np.min(grid) + np.min(grid) * gridHeight
+            plotGrid[np.where(plotGrid > maxValue)] = maxValue
+            plotGrid[np.where(np.isnan(plotGrid))] = maxValue
+        fig, ax = plt.subplots()
+        mat = plt.imshow(plotGrid, vmin=np.min(plotGrid), vmax=np.max(plotGrid),
+                         extent=[fromParam1, tillParam1, tillParam2, fromParam2])
+        clb = fig.colorbar(mat)
+        plt.title(title)
+        plt.xlabel(param1)
+        plt.ylabel(param2)
+        plt.show()
 
 
+    def plotErrorSurface(self, esn, N, transientTime, trainInputs, trainTargets, validationInputs, validationTargets, paramDic, gridHeight = None, verbose=1):
+        def setParameter(esn, parameter, value):
+            if parameter == "Spectral radius":
+                esn.setSpectralRadius(value)
+            elif parameter == "Leaking rate":
+                esn.setLeakingRate(value)
+            elif parameter == "Input scaling":
+                esn.setInputScaling(value)
+            else:
+                raise ValueError("Hyperparameter {0} does not exist.".format(parameter))
+
+
+        if len(list(paramDic.keys())) != 2:
+            raise ValueError("Can only plot error surface of exactly 2 Hyperparameter")
+
+        if verbose > 0:
+            # initialize the progressbar to indicate the progress
+            bar = progressbar.ProgressBar(max_value=N*N-1, redirect_stdout=True)
+
+        param1 = list(paramDic.keys())[0]
+        fromParam1, tillParam1 = list(paramDic.values())[0]
+
+        param2 = list(paramDic.keys())[1]
+        fromParam2, tillParam2 = list(paramDic.values())[1]
+
+
+
+        trainErrorGrid = np.zeros((N, N))
+        validationErrorGrid = np.zeros((N, N))
+        widthParam1 = (tillParam1 - fromParam1) / N
+        widthParam2 = (tillParam2 - fromParam2) / N
+        for i in range(N):
+            p1 = i * widthParam1 + fromParam1
+            setParameter(esn, param1, p1)
+            for j in range(N):
+                p2 = j * widthParam2 + fromParam2
+                setParameter(esn, param2, p2)
+
+                trainErrorGrid[i, j] = esn.fit(trainInputs, trainTargets, transientTime=transientTime)
+                validationErrorGrid[i, j] = hlp.loss(esn.predict(validationInputs), validationTargets)
+
+                if verbose > 0:
+                    bar.update(i*N + j)
+
+        self.plotGrid(trainErrorGrid, "Train error", fromParam1, tillParam1, fromParam2, tillParam2, param1, param2, gridHeight)
+
+        self.plotGrid(validationErrorGrid, "Validation error", fromParam1, tillParam1, fromParam2, tillParam2, param1, param2, gridHeight)
+
+
+
+        return trainErrorGrid, validationErrorGrid
