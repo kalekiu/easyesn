@@ -13,6 +13,9 @@ from sklearn.svm import SVR
 from sklearn.linear_model import LogisticRegression
 import progressbar
 
+from .optimizers import GradientOptimizer
+from .optimizers import GridSearchOptimizer
+
 
 class PredictionESN(BaseESN):
     def __init__(self, n_input, n_reservoir, n_output,
@@ -193,3 +196,10 @@ class PredictionESN(BaseESN):
 
         #return the result
         return Y.T
+
+    def optimize(self, trainingInput, trainingOutput, validationInput, validationOutput, verbose):
+        gridSearch = GridSearch()
+        gradientOptimizer = GradientOptimizer()
+        pipe = Pipeline(gridSearch, gradientOptimizer)
+
+        pipe.fit(trainingInput, trainingOutput, validationInput, validationOutput, verbose)
