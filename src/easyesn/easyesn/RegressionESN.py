@@ -16,14 +16,14 @@ import progressbar
 
 class RegressionESN(BaseESN):
     def __init__(self, n_input, n_reservoir, n_output,
-                 spectralRadius=1.0, noise_level=0.0, inputScaling=None,
+                 spectralRadius=1.0, noiseLevel=0.0, inputScaling=None,
                  leakingRate=1.0, sparseness=0.2, random_seed=None,
                  out_activation=lambda x: x, out_inverse_activation=lambda x: x,
                  weight_generation='naive', bias=1.0, output_bias=1.0,
                  outputInputScaling=1.0, input_density=1.0, solver='pinv', regression_parameters={}, activation = B.tanh):
 
         super(RegressionESN, self).__init__(n_input=n_input, n_reservoir=n_reservoir, n_output=n_output, spectralRadius=spectralRadius,
-                                  noise_level=noise_level, inputScaling=inputScaling, leakingRate=leakingRate, sparseness=sparseness,
+                                  noiseLevel=noiseLevel, inputScaling=inputScaling, leakingRate=leakingRate, sparseness=sparseness,
                                   random_seed=random_seed, out_activation=out_activation, out_inverse_activation=out_inverse_activation,
                                   weight_generation=weight_generation, bias=bias, output_bias=output_bias, outputInputScaling=outputInputScaling,
                                   input_density=input_density, activation=activation)

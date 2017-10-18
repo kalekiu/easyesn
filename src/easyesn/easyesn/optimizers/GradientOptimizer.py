@@ -1,19 +1,30 @@
 import numpy as np
-from . import helper as hlp
-from . import backend as B
+from .. import helper as hlp
+from .. import backend as B
 
 import progressbar
 
-class ESNOptimizer(object):
+class GradientOptimizer(object):
     def _validateReservoir(self):
         if not np.isclose(self._reservoir.noise_level, 0.0):
             raise ValueError("Noise must be set to 0.0 for this optimizer, but it is set to {0}.".format(self._reservoir.noise_level))
         if self._reservoir._solver is not "lsqr":
             raise ValueError("The reservoir's solver must be set to 'lsqr' (Ridge Regression) for this optimizer.")
 
-    def __init__(self, reservoir):
+    def __init__(self, reservoir, learningRate=0.0001):
         self._reservoir = reservoir
         self._validateReservoir()
+        self.setLearningRate(learningRate)
+
+
+    def setLearningRate(self, learningRate):
+        if np.isscalar(learningRate):
+            self.learningRates = (learningRate, learningRate, learningRate)
+        else:
+            if len(learningRate) != 3:
+                raise ValueError("LearningRate has to be a scalar or a list/tuple with 3 entries.")
+            else:
+                self.learningRates = learningRate
 
     ####################################################################################################################################################
 
@@ -21,24 +32,20 @@ class ESNOptimizer(object):
     def activationDerivation(self, X):
         return 4 / (2 + B.exp(2 * X) + B.exp(-2 * X))
 
-    # del x / del alpha
-    def derivationForLeakingRate(self, oldDerivative, u, x):
+    def _derivationLrSrIs(self, oldDerivativeLr, oldDerivativeSr, oldDerivativeIs, W_uniform, W_in_uniform, u, x):
         a = self._reservoir._leakingRate
         X = self._reservoir.calculateLinearNetworkTransmissions(u)
-        return (1-a) * oldDerivative - x + self._reservoir._activation(X) + a * self.activationDerivation(X) * B.dot(self._reservoir._W, oldDerivative )
 
-    # del x / del rho
-    def derivationForSpectralRadius(self, W_uniform, oldDerivative, u, x):
-        a = self._reservoir._leakingRate
-        X = self._reservoir.calculateLinearNetworkTransmissions(u)
-        return (1-a) * oldDerivative + a * self.activationDerivation(X) * ( B.dot(self._reservoir._W, oldDerivative) + B.dot(W_uniform, x) )
+        activationX = self._reservoir._activation(X)
+        activationDerivationX = self.activationDerivation(X)
 
-    # del x / del s_in
-    def derivationForInputScaling(self, W_in_uniform, oldDerivative, u, x):
-        a = self._reservoir._leakingRate
-        X = self._reservoir.calculateLinearNetworkTransmissions(u)
+        dLr = (1-a) * oldDerivativeLr - x + activationX + a * activationDerivationX * B.dot(self._reservoir._W, oldDerivativeLr)
+        dSr = (1-a) * oldDerivativeSr + a * activationDerivationX * (B.dot(self._reservoir._W, oldDerivativeSr) + B.dot(W_uniform, x))
+
         u = B.vstack((1,u))
-        return (1-a)  * oldDerivative + a * self.activationDerivation(X) * ( B.dot(self._reservoir._W, oldDerivative) + B.dot(W_in_uniform, u) )
+        dIs = (1-a) * oldDerivativeIs + a * activationDerivationX * (B.dot(self._reservoir._W, oldDerivativeIs) + B.dot(W_in_uniform, u))
+
+        return dLr, dSr, dIs
 
     # del W_out / del beta
     def derivationForPenalty(self, Y, X, penalty):
@@ -73,10 +80,17 @@ class ESNOptimizer(object):
     ####################################################################################################################################################
 
 
+    def fit(self, trainingInput, trainingOutput, validationInput, validationOutput, verbose=1):
+        self.optimizeParameterForTrainError(trainingInput, trainingOutput, validationInput, validationOutput, verbose)
+        self.optimizePenaltyForEvaluationError(trainingInput, trainingOutput, validationInput, validationOutput, verbose)
+        self.optimizeParameterForValidationError(trainingInput, trainingOutput, validationInput, validationOutput, verbose)
+
     def optimizeParameterForTrainError(self, trainingInputData, trainingOutputData, validationInputData, validationOutputData,
-                                       learningRate=0.0001, epochs=1, transientTime=None, verbose=1):
+                                       epochs=1, transientTime=None, verbose=1):
 
         self._validateReservoir()
+
+        learningRate = self.learningRates[0]
 
         if not np.isscalar(self._reservoir._inputScaling):
             raise ValueError("Only penalty optimization is supported for a multiple input scalings at the moment. We are working on it.")
@@ -153,9 +167,11 @@ class ESNOptimizer(object):
 
 
                 # calculate the del /x del (rho, alpha, s_in)
-                derivationSpectralRadius = self.derivationForSpectralRadius(W_uniform, derivationSpectralRadius, u, oldx)
-                derivationLeakingRate = self.derivationForLeakingRate(derivationLeakingRate, u, oldx)
-                derivationInputScaling = self.derivationForInputScaling(W_in_uniform, derivationInputScaling, u, oldx)
+                #derivationSpectralRadius = self.derivationForSpectralRadius(W_uniform, derivationSpectralRadius, u, oldx)
+                #derivationLeakingRate = self.derivationForLeakingRate(derivationLeakingRate, u, oldx)
+                #derivationInputScaling = self.derivationForInputScaling(W_in_uniform, derivationInputScaling, u, oldx)
+
+                derivationLeakingRate, derivationSpectralRadius, derivationInputScaling = self._derivationLrSrIs(derivationLeakingRate, derivationSpectralRadius, derivationInputScaling, W_uniform, W_in_uniform, u, oldx)
                 if t >= transientTime:
 
                     # concatenate with zeros (for the derivatives of the input and the 1, which are always 0)
@@ -240,10 +256,12 @@ class ESNOptimizer(object):
 
         return (validationLosses, fitLosses, inputScalings, leakingRates, spectralRadiuses)
 
-    def optimizeParameterForEvaluationError(self, trainingInputData, trainingOutputData, validationInputData, validationOutputData,
-                                            optimizationLength, learningRate=0.0001, epochs=1, transientTime=None, verbose=1):
+    def optimizeParameterForValidationError(self, trainingInputData, trainingOutputData, validationInputData, validationOutputData,
+                                            optimizationLength, epochs=1, transientTime=None, verbose=1):
 
         self._validateReservoir()
+
+        learningRate = self.learningRates[1]
 
         if not np.isscalar(self._reservoir._inputScaling):
             raise ValueError("Only penalty optimization is supported for a multiple input scalings at the moment. We are working on it.")
@@ -316,10 +334,12 @@ class ESNOptimizer(object):
                 x = self._reservoir._X[2:,t]
 
 
-                # calculate the del x/ del (rho, alpha, s_in)
-                derivationSpectralRadius = self.derivationForSpectralRadius(W_uniform, derivationSpectralRadius, u, oldx)
-                derivationLeakingRate = self.derivationForLeakingRate(derivationLeakingRate, u, oldx)
-                derivationInputScaling = self.derivationForInputScaling( W_in_uniform, derivationInputScaling, u, oldx)
+                # calculate the del /x del (rho, alpha, s_in)
+                #derivationSpectralRadius = self.derivationForSpectralRadius(W_uniform, derivationSpectralRadius, u, oldx)
+                #derivationLeakingRate = self.derivationForLeakingRate(derivationLeakingRate, u, oldx)
+                #derivationInputScaling = self.derivationForInputScaling(W_in_uniform, derivationInputScaling, u, oldx)
+
+                derivationLeakingRate, derivationSpectralRadius, derivationInputScaling = self._derivationLrSrIs(derivationLeakingRate, derivationSpectralRadius, derivationInputScaling, W_uniform, W_in_uniform, u, oldx)
                 if t >= transientTime:
 
                     # concatenate with zeros (for the derivatives of the input and the 1, which are always 0)
@@ -342,10 +362,12 @@ class ESNOptimizer(object):
                 # calculate error at given time step
                 error = (validationOutputData[t] - B.dot( self._reservoir._W_out, B.vstack((1, u, x)) ) ).T
 
-                # calculate del x / del (rho, alpha, s_in)
-                derivationSpectralRadius = self.derivationForSpectralRadius(W_uniform, derivationSpectralRadius, u, oldx)
-                derivationLeakingRate = self.derivationForLeakingRate(derivationLeakingRate, u, oldx)
-                derivationInputScaling = self.derivationForInputScaling(W_in_uniform, derivationInputScaling, u, oldx)
+# calculate the del /x del (rho, alpha, s_in)
+                #derivationSpectralRadius = self.derivationForSpectralRadius(W_uniform, derivationSpectralRadius, u, oldx)
+                #derivationLeakingRate = self.derivationForLeakingRate(derivationLeakingRate, u, oldx)
+                #derivationInputScaling = self.derivationForInputScaling(W_in_uniform, derivationInputScaling, u, oldx)
+
+                derivationLeakingRate, derivationSpectralRadius, derivationInputScaling = self._derivationLrSrIs(derivationLeakingRate, derivationSpectralRadius, derivationInputScaling, W_uniform, W_in_uniform, u, oldx)
 
                 # concatenate derivations with 0
                 derivationConcatinationSpectralRadius = B.concatenate( (B.zeros(self._reservoir.n_input + 1), derivationSpectralRadius[:, 0]), axis=0)
@@ -410,9 +432,11 @@ class ESNOptimizer(object):
         return (validationLosses, fitLosses, inputScalings, leakingRates, spectralRadiuses)
 
     def optimizePenaltyForEvaluationError(self, trainingInputData, trainingOutputData, validationInputData, validationOutputData,
-                                          optimizationLength, learningRate=0.0001, epochs=1, penalty=0.1, transientTime=0, verbose=1):
+                                          optimizationLength, epochs=1, penalty=0.1, transientTime=0, verbose=1):
 
         self._validateReservoir()
+
+        learningRate = self.learningRates[2]
 
         # initializations of arrays:
         if (len(trainingOutputData.shape) == 1):

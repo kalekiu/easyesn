@@ -12,20 +12,18 @@ from sklearn.linear_model import Ridge
 from sklearn.svm import SVR
 from sklearn.linear_model import LogisticRegression
 import progressbar
-
-from .optimizers import GradientOptimizer
-from .optimizers import GridSearchOptimizer
+from .OneHotEncoder import OneHotEncoder
 
 
-class PredictionESN(BaseESN):
-    def __init__(self, n_input, n_reservoir, n_output,
+class ClassificationESN(BaseESN):
+    def __init__(self, n_input, n_reservoir, n_classes,
                  spectralRadius=1.0, noiseLevel=0.0, inputScaling=None,
                  leakingRate=1.0, sparseness=0.2, random_seed=None,
-                 out_activation=lambda x: x, out_inverse_activation=lambda x: x,
+                 out_activation=lambda x: 0.1+0.98*x/(1+B.exp(-x)), out_inverse_activation=lambda x: B.log((x*0.98+0.01)/(0.99-x*0.98)),
                  weight_generation='naive', bias=1.0, output_bias=1.0,
                  outputInputScaling=1.0, input_density=1.0, solver='pinv', regression_parameters={}, activation = B.tanh):
 
-        super(PredictionESN, self).__init__(n_input=n_input, n_reservoir=n_reservoir, n_output=n_output, spectralRadius=spectralRadius,
+        super(ClassificationESN, self).__init__(n_input=n_input, n_reservoir=n_reservoir, n_output=n_classes, spectralRadius=spectralRadius,
                                   noiseLevel=noiseLevel, inputScaling=inputScaling, leakingRate=leakingRate, sparseness=sparseness,
                                   random_seed=random_seed, out_activation=out_activation, out_inverse_activation=out_inverse_activation,
                                   weight_generation=weight_generation, bias=bias, output_bias=output_bias, outputInputScaling=outputInputScaling,
@@ -34,6 +32,7 @@ class PredictionESN(BaseESN):
 
         self._solver = solver
         self._regression_parameters = regression_parameters
+        self._oneHotEncoder = OneHotEncoder()
 
         """
             allowed values for the solver:
@@ -47,26 +46,45 @@ class PredictionESN(BaseESN):
                 sklearn_sag
         """
 
-
     """
-        Fits the ESN so that by applying the inputData the outputData will be produced.
+        Fits the ESN so that by applying a time series out of inputData the outputData will be produced.
+
     """
     def fit(self, inputData, outputData, transientTime=0, verbose=0):
         #check the input data
         if inputData.shape[0] != outputData.shape[0]:
             raise ValueError("Amount of input and output datasets is not equal - {0} != {1}".format(inputData.shape[0], outputData.shape[0]))
 
-        trainLength = inputData.shape[0]
+        nSequences = inputData.shape[0]
+        trainingLength = inputData.shape[1]
 
+        if outputData.shape[1] > 1 and outputData.shape[1] != self.n_output:
+            raise ValueError("The outputData has the shape {0}, which indicates that it is already one hot encoded, " \
+                             "but it does not match the number of classes ({1}) specified in the constructur.".format(outputData.shape, self.n_output))
 
+        if outputData.shape[1] == 1 and len(np.unique(outputData)) > 2:
+            outputData = self._oneHotEncoder.transform(outputData)
 
         self._x = B.zeros((self.n_reservoir,1))
 
-        self._X = self.propagate(inputData, transientTime, verbose)
+        self._X = B.zeros((1 + self.n_input + self.n_reservoir, nSequences*(trainingLength-transientTime)))
+        Y_target = B.zeros((self.n_output, (trainingLength-transientTime)*nSequences))
 
+        if verbose > 0:
+            bar = progressbar.ProgressBar(max_value=len(inputData), redirect_stdout=True, poll_interval=0.0001)
+            bar.update(0)
 
-        #define the target values
-        Y_target = self.out_inverse_activation(outputData).T[:,transientTime:]
+        for n in range(len(inputData)):
+            self._x = B.zeros((self.n_reservoir, 1))
+            self._X[:, n*(trainingLength-transientTime):(n+1)*(trainingLength-transientTime)] = self.propagate(inputData[n], transientTime, verbose=0)
+            #set the target values
+            Y_target[:, n*(trainingLength-transientTime):(n+1)*(trainingLength-transientTime)] = np.tile(self.out_inverse_activation(outputData[n]), trainingLength-transientTime).reshape(-1, self.n_output).T
+
+            if verbose > 0:
+                bar.update(n)
+
+        if verbose > 0:
+            bar.finish()
 
         if (self._solver == "pinv"):
             self._W_out = B.dot(Y_target, B.pinv(self._X))
@@ -113,93 +131,49 @@ class PredictionESN(BaseESN):
             #calculate the training prediction now
             train_prediction = self.out_activation(self._ridgeSolver.predict(self._X.T))
 
+        train_prediction = train_prediction[::trainingLength]
+
         #calculate the training error now
-        training_error = B.sqrt(B.mean((train_prediction - outputData[transientTime:])**2))
+        training_error = B.sqrt(B.mean((train_prediction - outputData)**2))
         return training_error
 
 
     """
-        Use the ESN in the generative mode to generate a signal autonomously.
-    """
-    def generate(self, n, initial_input, continuation=True, initial_data=None, update_processor=lambda x:x):
-        #check the input data
-        if (self.n_input != self.n_output):
-            raise ValueError("n_input does not equal n_output. The generation mode uses its own output as its input. Therefore, n_input has to be equal to n_output - please adjust these numbers!")
-
-        #let some input run through the ESN to initialize its states from a new starting value
-        if (not continuation):
-            self._x = B.zeros(self._x.shape)
-
-            if (initial_data is not None):
-                for t in range(initial_data.shape[0]):
-                    super(PredictionESN, self).update(initial_data[t])
-
-        predLength = n
-
-        Y = B.zeros((self.n_output,predLength))
-        inputData = initial_input
-        for t in range(predLength):
-            #update the inner states
-            u = super(PredictionESN, self).update(inputData)
-
-            #calculate the prediction using the trained model
-            if (self._solver in ["sklearn_auto", "sklearn_lsqr", "sklearn_sag", "sklearn_svd"]):
-                y = self._ridgeSolver.predict(B.vstack((self.output_bias, self.outputInputScaling*u, self._x)).T)
-            else:
-                y = B.dot(self._W_out, B.vstack((self.output_bias, self.outputInputScaling*u, self._x)))
-
-            #apply the output activation function
-            y = self.out_activation(y[:,0])
-            Y[:,t] = update_processor(y)
-            inputData = y
-
-        #return the result
-        return Y.T
-
-    """
         Use the ESN in the predictive mode to predict the output signal by using an input signal.
     """
-    def predict(self, inputData, continuation=True, initial_data=None, update_processor=lambda x:x, verbose=0):
-        #let some input run through the ESN to initialize its states from a new starting value
-        if (not continuation):
-            self._x = B.zeros(self._x.shape)
+    def predict(self, inputData, update_processor=lambda x:x, transientTime=0, verbose=0):
+        if (len(inputData.shape) == 1):
+            inputData = inputData[None, :]
 
-            if (initial_data is not None):
-                for t in range(initial_data.shape[0]):
-                    super(PredictionESN, self).update(initial_data[t])
+        predictionLength = inputData.shape[1]
 
-        predLength = inputData.shape[0]
-
-        Y = B.zeros((self.n_output,predLength))
+        Y = B.empty((inputData.shape[0], self.n_output))
 
         if (verbose > 0):
-            bar = progressbar.ProgressBar(max_value=predLength, redirect_stdout=True, poll_interval=0.0001)
+            bar = progressbar.ProgressBar(max_value=inputData.shape[0], redirect_stdout=True, poll_interval=0.0001)
             bar.update(0)
 
-        for t in range(predLength):
-            #update the inner states
-            u = super(PredictionESN, self).update(inputData[t])
+        for n in range(inputData.shape[0]):
+            #reset the state
+            self._x = B.zeros(self._x.shape)
 
+            X = self.propagate(inputData[n], transientTime)
             #calculate the prediction using the trained model
             if (self._solver in ["sklearn_auto", "sklearn_lsqr", "sklearn_sag", "sklearn_svd", "sklearn_svr"]):
-                y = self._ridgeSolver.predict(B.vstack((self.output_bias, self.outputInputScaling*u, self._x)).T).reshape((-1,1))
+                y = self._ridgeSolver.predict(X.T).reshape((self.n_output, -1))
             else:
-                y = B.dot(self._W_out, B.vstack((self.output_bias, self.outputInputScaling*u, self._x)))
+                y = B.dot(self._W_out, X)
 
-            #apply the output activation function
-            Y[:,t] = update_processor(self.out_activation(y[:,0]))
-            if (verbose > 0):
-                bar.update(t)
+            Y[n] = np.mean(y, 1)
 
-        if (verbose > 0):
+            if verbose > 0:
+                bar.update(n)
+
+        if verbose > 0:
             bar.finish()
 
         #return the result
-        return Y.T
-
-    def optimize(self, trainingInput, trainingOutput, validationInput, validationOutput, verbose):
-        gridSearch = GridSearch()
-        gradientOptimizer = GradientOptimizer()
-        pipe = Pipeline(gridSearch, gradientOptimizer)
-
-        pipe.fit(trainingInput, trainingOutput, validationInput, validationOutput, verbose)
+        result = B.zeros(Y.shape)
+        for i,n in enumerate(B.argmax(Y, 1)): 
+            result[i, n] = 1.0
+        return result

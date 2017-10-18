@@ -63,6 +63,9 @@ def power(x, y):
 def exp(x):
 	return np.exp(x)
 
+def log(x):
+    return np.log(x)
+
 def tanh(x):
 	return np.tanh(x)
 
@@ -71,3 +74,6 @@ def concatenate(tuple, axis=0):
 
 def sign(x):
 	return np.sign(x)
+
+def argmax(x, axis):
+    return np.argmax(x, axis)

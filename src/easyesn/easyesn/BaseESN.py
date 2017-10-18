@@ -16,7 +16,7 @@ from . import backend as B
 
 class BaseESN(object):
     def __init__(self, n_input, n_reservoir, n_output,
-                 spectralRadius=1.0, noise_level=0.01, inputScaling=None,
+                 spectralRadius=1.0, noiseLevel=0.01, inputScaling=None,
                  leakingRate=1.0, sparseness=0.2, random_seed=None,
                  out_activation=lambda x: x, out_inverse_activation=lambda x: x,
                  weight_generation='naive', bias=1.0, output_bias=1.0, outputInputScaling=1.0,
@@ -27,7 +27,7 @@ class BaseESN(object):
         self.n_output = n_output
 
         self._spectralRadius = spectralRadius
-        self.noise_level = noise_level
+        self.noise_level = noiseLevel
         self.sparseness = sparseness
         self._leakingRate = leakingRate
         self.input_density = input_density
