@@ -58,9 +58,7 @@ class PredictionESN(BaseESN):
 
         trainLength = inputData.shape[0]
 
-
-
-        self._x = B.zeros((self.n_reservoir,1))
+        self.resetState()
 
         self._X = self.propagate(inputData, transientTime, verbose)
 

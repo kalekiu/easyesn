@@ -4,7 +4,7 @@
 
 import numpy as np
 import numpy.random as rnd
-from .PredictionESN import PredictionESN
+from .BaseESN import BaseESN
 
 from . import backend as B
 
@@ -16,7 +16,7 @@ import progressbar
 import multiprocessing
 
 
-class SpatioTemporalESN(object):
+class SpatioTemporalESN(BaseESN):
     def __init__(self, inputShape, n_reservoir,
                  filterSize=1, stride=1, borderMode="unique"
                  spectralRadius=1.0, noiseLevel=0.0, inputScaling=None,
@@ -74,8 +74,13 @@ class SpatioTemporalESN(object):
                 sklearn_lsqr
                 sklearn_sag
         """
+        
+    def resetState(self):
+        self._x = B.zeros((self._nWorkers, self.n_reservoir, 1))
 
-    def
+    
+    def resetState(self, index):
+        self._x[index] = B.zeros((self.n_reservoir, 1))
 
     """
         Fits the ESN so that by applying a time series out of inputData the outputData will be produced.
@@ -98,21 +103,47 @@ class SpatioTemporalESN(object):
         self._sharedNamespace._WOuts = B.empty(nJobs, 1+self.n_reservoir+1, self.n_out)
 
         def processThreadResults(queue, nJobs, verbose):
+            nJobsDone = 0
+
+            while nJobsDone < nJobs:
+                newData = queue.get()
+
+                nJobsDone += 1
+
+                print(nJobsDone)
 
 
         def fitProcessInit(q):
             fitProcess.q = q
 
         def fitProcess(indices):
+            workerIndex, y, x = indices
             #create patchedInputData
+            inData = inputData[y-self._filterSize:y+self._filterSize::self._stride, x-self._filterSize:x+self._filterSize::self._stride, :]
 
             #create target output series
+            outData = outputData[y, x]
 
-            esn.fit(inputData=patchedInputData, outputData=targetOutputData, transientTime=transientTime, verbose=0)
-            fitProcess.q.put(indices, self.x, self._WOut)
+            #now fit
+            X = self.propagate(inputData, transientTime, verbose)
+
+            #define the target values
+            Y_target = self.out_inverse_activation(outData).T[:, transientTime:]
+
+            X_T = X.T
+            WOut = B.dot(B.dot(Y_target, X_T),B.inv(B.dot(self._X, X_T) + self._regression_parameters[0]*B.identity(1+self.n_input+self.n_reservoir)))
+
+            #calculate the training prediction now
+            trainingPrediction = self.out_activation(B.dot(WOut, X).T)
+            
+            #store the state and the output matrix of the worker
+            fitProcess.q.put(indices, self.x[workerIndex].copy(), WOut.copy())
 
         queue = Queue()
-        pool = Pool(processes=nJobs, initializer=fitProcessInit, initargs=[queue,] )
+        self._nWorkers = np.max(multiprocessing.cpu_count()-1, 1)
+        pool = Pool(processes=self._nWorkers, initializer=fitProcessInit, initargs=[queue,] )
+
+        self.resetState()
 
         processProcessResultsThread = Process(target=processThreadResults, args=(queue, nJobs, verbose))
         processProcessResultsThread.start()

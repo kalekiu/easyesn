@@ -77,3 +77,6 @@ def sign(x):
 
 def argmax(x, axis):
     return np.argmax(x, axis)
+
+def zeros_like(x):
+    return np.zeros_like(x)
