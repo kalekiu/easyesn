@@ -206,8 +206,8 @@ class BaseESN(object):
             self._W_feedback = B.rand(self.n_reservoir, 1 + self.n_output) - 0.5
 
 
-    def calculateLinearNetworkTransmissions(self, u):
-        return B.dot(self._W_input, B.vstack((self.bias, u))) + B.dot(self._W, self._x)
+    def calculateLinearNetworkTransmissions(self, u, x=self._x):
+        return B.dot(self._W_input, B.vstack((self.bias, u))) + B.dot(self._W, x)
     """
         Updates the inner states. Returns the UNSCALED but reshaped input of this step.
     """
