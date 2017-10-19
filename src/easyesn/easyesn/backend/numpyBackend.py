@@ -45,8 +45,8 @@ def zeros(x):
 def empty(x):
 	return np.empty(x)
 
-def mean(x):
-	return np.mean(x)
+def mean(x, axis):
+	return np.mean(x, axis)
 
 def sqrt(x):
 	return np.sqrt(x)

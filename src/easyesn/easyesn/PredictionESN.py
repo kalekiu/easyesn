@@ -35,6 +35,8 @@ class PredictionESN(BaseESN):
         self._solver = solver
         self._regression_parameters = regression_parameters
 
+        self._x = B.zeros((self.n_reservoir, 1))
+
         """
             allowed values for the solver:
                 pinv
