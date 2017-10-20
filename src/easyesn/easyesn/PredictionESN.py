@@ -35,6 +35,8 @@ class PredictionESN(BaseESN):
         self._solver = solver
         self._regression_parameters = regression_parameters
 
+        self._x = B.zeros((self.n_reservoir, 1))
+
         """
             allowed values for the solver:
                 pinv
@@ -58,9 +60,7 @@ class PredictionESN(BaseESN):
 
         trainLength = inputData.shape[0]
 
-
-
-        self._x = B.zeros((self.n_reservoir,1))
+        self.resetState()
 
         self._X = self.propagate(inputData, transientTime, verbose)
 

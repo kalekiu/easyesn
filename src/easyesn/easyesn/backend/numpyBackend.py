@@ -45,8 +45,8 @@ def zeros(x):
 def empty(x):
 	return np.empty(x)
 
-def mean(x):
-	return np.mean(x)
+def mean(x, axis):
+	return np.mean(x, axis)
 
 def sqrt(x):
 	return np.sqrt(x)
@@ -77,3 +77,6 @@ def sign(x):
 
 def argmax(x, axis):
     return np.argmax(x, axis)
+
+def zeros_like(x):
+    return np.zeros_like(x)

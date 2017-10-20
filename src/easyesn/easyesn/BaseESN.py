@@ -56,7 +56,6 @@ class BaseESN(object):
         self._create_reservoir(weight_generation, feedback)
 
 
-
     def setSpectralRadius(self, newSpectralRadius):
         self._W = self._W * ( newSpectralRadius / self._spectralRadius )
         self._spectralRadius = newSpectralRadius
@@ -71,7 +70,14 @@ class BaseESN(object):
         self._W_input = self._W_input * ( self._expanded_inputScaling / self._inputScaling )
         self._inputScaling = newInputScaling
 
-    def propagate(self, inputData, transientTime, verbose=0):
+
+    def resetState(self):
+        self._x = B.zeros_like(self._x)
+
+    def propagate(self, inputData, transientTime, x=None, verbose=0):
+        if x is None:
+            x = self._x
+
         trainLength = len(inputData)
 
         # define states' matrix
@@ -82,10 +88,10 @@ class BaseESN(object):
             bar.update(0)
 
         for t in range(trainLength):
-            u = self.update(inputData[t])
+            u = self.update(inputData[t], x=x)
             if (t >= transientTime):
                 #add valueset to the states' matrix
-                X[:,t-transientTime] = B.vstack((self.output_bias, self.outputInputScaling*u, self._x))[:,0]
+                X[:,t-transientTime] = B.vstack((self.output_bias, self.outputInputScaling*u, x))[:,0]
             if (verbose > 0):
                 bar.update(t)
 
@@ -206,45 +212,54 @@ class BaseESN(object):
             self._W_feedback = B.rand(self.n_reservoir, 1 + self.n_output) - 0.5
 
 
-    def calculateLinearNetworkTransmissions(self, u):
-        return B.dot(self._W_input, B.vstack((self.bias, u))) + B.dot(self._W, self._x)
-    """
-        Updates the inner states. Returns the UNSCALED but reshaped input of this step.
-    """
-    def update(self, inputData):
-        #reshape the data
-        u = inputData.reshape(self.n_input, 1)
+    def calculateLinearNetworkTransmissions(self, u, x=None):
+        if x is None:
+            x = self._x
 
-        #update the states
-        self._x = (1.0-self._leakingRate)*self._x + self._leakingRate * self._activation( self.calculateLinearNetworkTransmissions(u)+
-                                                                          (B.rand()-0.5)*self.noise_level)
-        self._x = np.asarray(self._x)
-
-        return u
+        return B.dot(self._W_input, B.vstack((self.bias, u))) + B.dot(self._W, x)
 
     """
         Updates the inner states. Returns the UNSCALED but reshaped input of this step.
     """
-    def update_feedback(self, inputData, outputData):
-        #the input is allowed to be "empty" (size=0)
-        if self.n_input != 0:
+    def update(self, inputData, outputData=None, x=None):
+        if x is None:
+            x = self._x
+
+        if self._W_feedback is None:
             #reshape the data
             u = inputData.reshape(self.n_input, 1)
-            outputData = outputData.reshape(self.n_output, 1)
 
             #update the states
-            self._x = (1.0-self._leakingRate)*self._x + self._leakingRate*self._activation(B.dot(self._W_input, B.vstack((self.bias, u))) + B.dot(self._W, self._x) +
-                                                                              B.dot(self._W_feedback, B.vstack((self.output_bias, outputData))) + (B.rand()-0.5)*self.noise_level)
-
+            transmission = self.calculateLinearNetworkTransmissions(u, x)
+            x *= (1.0-self._leakingRate)
+            x += self._leakingRate * self._activation(transmission + (B.rand()-0.5)*self.noise_level)
+        
             return u
-        else:
-            #reshape the data
-            outputData = outputData.reshape(self.n_output, 1)
-            #update the states
-            self._x = (1.0-self._leakingRate)*self._x + self._leakingRate*self._activation(B.dot(self._W, self._x) + B.dot(self._W_feedback, B.vstack((self.output_bias, outputData))) +
-                                                                              (B.rand()-0.5)*self.noise_level)
 
-            return np.empty((0, 1))
+        else:
+            #the input is allowed to be "empty" (size=0)
+            if self.n_input != 0:
+                #reshape the data
+                u = inputData.reshape(self.n_input, 1)
+                outputData = outputData.reshape(self.n_output, 1)
+
+                #update the states
+                transmission = self.calculateLinearNetworkTransmissions(u, x)
+                x *= (1.0-self._leakingRate)
+                x += self._leakingRate*self._activation(transmission +
+                     B.dot(self._W_feedback, B.vstack((self.output_bias, outputData))) + (B.rand()-0.5)*self.noise_level)
+
+                return u
+            else:
+                #reshape the data
+                outputData = outputData.reshape(self.n_output, 1)
+                #update the states
+                transmission = B.dot(self._W, x)
+                x *= (1.0-self._leakingRate)
+                x += self._leakingRate*self._activation(transmission + B.dot(self._W_feedback, B.vstack((self.output_bias, outputData))) +
+                     (B.rand()-0.5)*self.noise_level)
+
+                return np.empty((0, 1))
 
     """
         Saves the ESN by pickling it.
