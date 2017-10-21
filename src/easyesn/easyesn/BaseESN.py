@@ -74,7 +74,7 @@ class BaseESN(object):
     def resetState(self):
         self._x = B.zeros_like(self._x)
 
-    def propagate(self, inputData, transientTime, x=None, verbose=0):
+    def propagate(self, inputData, transientTime, verbose=0, x=None ):
         if x is None:
             x = self._x
 
@@ -210,6 +210,8 @@ class BaseESN(object):
         #create the optional feedback matrix
         if feedback:
             self._W_feedback = B.rand(self.n_reservoir, 1 + self.n_output) - 0.5
+        else:
+            self._W_feedback = None
 
 
     def calculateLinearNetworkTransmissions(self, u, x=None):
