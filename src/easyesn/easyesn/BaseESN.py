@@ -210,6 +210,8 @@ class BaseESN(object):
         #create the optional feedback matrix
         if feedback:
             self._W_feedback = B.rand(self.n_reservoir, 1 + self.n_output) - 0.5
+        else:
+            self._W_feedback = None
 
 
     def calculateLinearNetworkTransmissions(self, u, x=None):
