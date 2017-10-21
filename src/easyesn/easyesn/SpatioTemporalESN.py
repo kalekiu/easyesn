@@ -22,7 +22,7 @@ from multiprocessing import process
 
 class SpatioTemporalESN(BaseESN):
     def __init__(self, inputShape, n_reservoir,
-                 filterSize=1, stride=1, borderMode="unique",
+                 filterSize=1, stride=1, borderMode="mirror", nWorkers="auto",
                  spectralRadius=1.0, noiseLevel=0.0, inputScaling=None,
                  leakingRate=1.0, sparseness=0.2, random_seed=None, averageOutputWeights=True,
                  out_activation=lambda x: x, out_inverse_activation=lambda x: x,
@@ -34,16 +34,18 @@ class SpatioTemporalESN(BaseESN):
             raise ValueError("`averageOutputWeights` can only be set to `True` when `solver` is set to `lsqr` (Ridge Regression)")
 
         self._borderMode = borderMode
-        if not borderMode in ["mirror", "padding"]:
-            raise ValueError("`borderMode` must be set to one of the following values: `mirror` or `padding`.")
+        if not borderMode in ["mirror", "padding", "edge", "wrap"]:
+            raise ValueError("`borderMode` must be set to one of the following values: `mirror`, `padding`, `edge` or `wrap`.")
 
         self._regression_parameters = regression_parameters
         self._solver = solver
 
         n_inputDimensions = len(inputShape)
 
+        if filterSize % 2 == 0:
+            raise ValueError("filterSize has to be an odd number (1, 3, 5, ...).")
         self._filterSize = filterSize
-        self._filterWidth = filterSize // 2
+        self._filterWidth = int(np.floor(filterSize / 2))
         self._stride = stride
 
         self._n_input = int(np.power(np.ceil(filterSize / stride), n_inputDimensions))
@@ -58,15 +60,25 @@ class SpatioTemporalESN(BaseESN):
             self._WOut = B.zeros((1, self._n_input+n_reservoir+1))
         self._xs = B.empty((np.prod(inputShape), n_reservoir, 1))
 
+        
+        if nWorkers=="auto":
+            self._nWorkers = np.max((cpu_count()-1, 1))
+        else:
+            self._nWorkers = nWorkers
+            
+
+        manager = Manager()
+        self.sharedNamespace = manager.Namespace()
+        if hasattr(self, "fitWorkerID") == False or self.parallelWorkerIDs is None:
+            self.parallelWorkerIDs = manager.Queue()
+            for i in range(self._nWorkers):
+                self.parallelWorkerIDs.put((i))
+
         super(SpatioTemporalESN, self).__init__(n_input=self._n_input, n_reservoir=n_reservoir, n_output=1, spectralRadius=spectralRadius,
                                   noiseLevel=noiseLevel, inputScaling=inputScaling, leakingRate=leakingRate, sparseness=sparseness,
                                   random_seed=random_seed, out_activation=out_activation, out_inverse_activation=out_inverse_activation,
                                   weight_generation=weight_generation, bias=bias, output_bias=output_bias, outputInputScaling=outputInputScaling,
                                   input_density=input_density, activation=activation)
-
-        manager = Manager()
-        self._sharedNamespace = manager.Namespace()
-        self._fitQueue = manager.Queue()
 
         """
             allowed values for the solver:
@@ -95,28 +107,43 @@ class SpatioTemporalESN(BaseESN):
         if rank != self.n_inputDimensions:
             raise ValueError("The `inputData` does not have a suitable shape. It has to have {0} spatial dimensions and 1 temporal dimension.".format(self.n_inputDimensions))
 
-        self._sharedNamespace.inputData = inputData
-        self._sharedNamespace.outputData = outputData
-        self._sharedNamespace.transientTime = transientTime
-       
-        jobs = np.stack(np.meshgrid(*[np.arange(self._filterWidth, x-self._filterWidth) for x in inputData.shape[1:]]), axis=rank).reshape(-1, rank).tolist()
+        manager = Manager()
+        fitQueue = manager.Queue()
+
+        if self._borderMode == "mirror":
+            modifiedInputData = np.pad(inputData, tuple([(0,0)] + [(self._filterWidth, self._filterWidth)]*rank), mode="symmetric")
+        elif self._borderMode == "padding":
+            modifiedInputData = np.pad(inputData, tuple([(0,0)] + [(self._filterWidth, self._filterWidth)]*rank), mode="constant", constant_values=0)
+        elif self._borderMode == "edge":
+            modifiedInputData = np.pad(inputData, tuple([(0,0)] + [(self._filterWidth, self._filterWidth)]*rank), mode="edge")
+        elif self._borderMode == "wrap":
+            modifiedInputData = np.pad(inputData, tuple([(0,0)] + [(self._filterWidth, self._filterWidth)]*rank), mode="wrap")
+
+        self.sharedNamespace.inputData = modifiedInputData
+        self.sharedNamespace.outputData = outputData
+        self.sharedNamespace.transientTime = transientTime
+
+        self.sharedNamespace.WOut = self._WOut
+        self.sharedNamespace.WOuts = self._WOuts
+        self.sharedNamespace.xs = self._xs
+               
+        jobs = np.stack(np.meshgrid(*[np.arange(x)+self._filterWidth for x in inputData.shape[1:]]), axis=rank).reshape(-1, rank).tolist()
         nJobs = len(jobs)
 
-        self._sharedNamespace.WOuts = B.empty((nJobs, 1+self.n_reservoir+1, 1))
-
-        self._nWorkers = np.max((cpu_count()-1, 1))
-        pool = Pool(processes=self._nWorkers)
-
-        self._fitWorkerIDs = list(range(self._nWorkers))
+        self.sharedNamespace.WOuts = self._WOuts
 
         self.resetState()
-
-        processProcessResultsThread = Process(target=self._processPoolWorkerResults, args=(nJobs, verbose))
+        
+        pool = Pool(processes=self._nWorkers, initializer=SpatioTemporalESN._init_fitProcess, initargs=[fitQueue, self])  
+        processProcessResultsThread = Process(target=self._processPoolWorkerResults, args=(nJobs, fitQueue, verbose))
         processProcessResultsThread.start()
-
 
         results = pool.map(self._fitProcess, jobs)
         pool.close()
+
+        self._WOut = self.sharedNamespace.WOut
+        self._WOuts = self.sharedNamespace.WOuts
+        self._xs = self.sharedNamespace.xs
 
     """
         Use the ESN in the predictive mode to predict the output signal by using an input signal.
@@ -127,27 +154,39 @@ class SpatioTemporalESN(BaseESN):
         if rank != self.n_inputDimensions:
             raise ValueError("The `inputData` does not have a suitable shape. It has to have {0} spatial dimensions and 1 temporal dimension.".format(self.n_inputDimensions))
 
-        self._sharedNamespace.inputData = inputData
-        self._sharedNamespace.transientTime = transientTime
-        self._sharedNamespace.predictionOutput = B.empty(np.insert(self.inputShape, 0, inputData.shape[0]-transientTime))
+        manager = Manager()
+        predictQueue = manager.Queue()
+
+        if self._borderMode == "mirror":
+            modifiedInputData = np.pad(inputData, tuple([(0,0)] + [(self._filterWidth, self._filterWidth)]*rank), mode="symmetric")
+        elif self._borderMode == "padding":
+            modifiedInputData = np.pad(inputData, tuple([(0,0)] + [(self._filterWidth, self._filterWidth)]*rank), mode="constant", constant_values=0)
+        elif self._borderMode == "edge":
+            modifiedInputData = np.pad(inputData, tuple([(0,0)] + [(self._filterWidth, self._filterWidth)]*rank), mode="edge")
+        elif self._borderMode == "wrap":
+            modifiedInputData = np.pad(inputData, tuple([(0,0)] + [(self._filterWidth, self._filterWidth)]*rank), mode="wrap")
+
+        self.sharedNamespace.inputData = modifiedInputData
+        self.sharedNamespace.transientTime = transientTime
+        _predictionOutput = B.zeros(np.insert(self.inputShape, 0, inputData.shape[0]-transientTime))
+        self.sharedNamespace.predictionOutput = _predictionOutput
        
-        jobs = np.stack(np.meshgrid(*[np.arange(self._filterWidth, x-self._filterWidth) for x in inputData.shape[1:]]), axis=rank).reshape(-1, rank).tolist()
+        jobs = np.stack(np.meshgrid(*[np.arange(x)+self._filterWidth for x in inputData.shape[1:]]), axis=rank).reshape(-1, rank).tolist()
         nJobs = len(jobs)
 
-        self._nWorkers = np.max((cpu_count()-1, 1))
-        pool = Pool(processes=self._nWorkers)
-
-        self._predictWorkerIDs = list(range(self._nWorkers))
+        #sharedNamespace.parallelWorkerIDs = list(range(self._nWorkers))
 
         self.resetState()
 
-        processProcessResultsThread = Process(target=self._processPoolWorkerResults, args=(nJobs, verbose))
+        pool = Pool(processes=self._nWorkers, initializer=SpatioTemporalESN._init_predictProcess, initargs=[predictQueue, self])  
+
+        processProcessResultsThread = Process(target=self._processPoolWorkerResults, args=(nJobs, predictQueue, verbose))
         processProcessResultsThread.start()
 
-        results = pool.map(self._preditProcess, jobs)
+        results = pool.map(self._predictProcess, jobs)
         pool.close()
 
-        return self._sharedNamespace.predictionOutput
+        return self.sharedNamespace.predictionOutput
     
     def _uniqueIDFromIndices(self, indices):
         id = indices[-1]
@@ -160,7 +199,7 @@ class SpatioTemporalESN(BaseESN):
                 id += self.inputShape[i]*indices[i+1]
         return id
 
-    def _processPoolWorkerResults(self, nJobs, verbose):
+    def _processPoolWorkerResults(self, nJobs, queue, verbose):
         nJobsDone = 0
         
         if verbose > 0:
@@ -168,7 +207,7 @@ class SpatioTemporalESN(BaseESN):
             bar.update(0)
 
         while nJobsDone < nJobs:
-            data = self._fitQueue.get()
+            data = queue.get()
             
             if len(data) > 2:
                 #result of fitting
@@ -178,16 +217,20 @@ class SpatioTemporalESN(BaseESN):
 
                  #store WOut
                 if self._averageOutputWeights:
-                    self._WOut += WOut/np.prod(self.inputShape)
+                    self.sharedNamespace.WOut += WOut/np.prod(self.inputShape)
                 else:
-                    self._WOuts[id] = WOut
-            
+                    self.sharedNamespace.WOuts[id] = WOut 
+
                 #store x
-                self._xs[id] = x
+                self.sharedNamespace.xs[id] = x
             else:
                 #result of predicting
                 indices, prediction = data
-                self._sharedNamespace.predictionOutput[:, indices[0], indices[1]] = prediction
+               
+                #update the value in this way to submit the changes through pathos
+                predictionOutput = self.sharedNamespace.predictionOutput
+                predictionOutput[tuple([Ellipsis] +  indices)] = prediction
+                self.sharedNamespace.predictionOutput = predictionOutput
            
             nJobsDone += 1
             if verbose > 0:
@@ -198,21 +241,28 @@ class SpatioTemporalESN(BaseESN):
         if verbose > 0:
             bar.finish()
 
+    @staticmethod
+    def _init_fitProcess(fitQueue, self):
+        SpatioTemporalESN._fitProcess.fitQueue = fitQueue
+        SpatioTemporalESN._fitProcess.self = self
+
     def _fitProcess(self, indices):
-        inputData = self._sharedNamespace.inputData
-        outputData = self._sharedNamespace.outputData
-        transientTime = self._sharedNamespace.transientTime
+        inputData = self.sharedNamespace.inputData
+        outputData = self.sharedNamespace.outputData
+        transientTime = self.sharedNamespace.transientTime
        
         y, x = indices
-        workerID = self._fitWorkerIDs[0]
-        self._fitWorkerIDs.pop(0)
+
+        #print(id(SpatioTemporalESN._fitProcess.sharedNamespace.parallelWorkerIDs))
+        workerID = self.parallelWorkerIDs.get()
+        #self.sharedNamespace.parallelWorkerIDs = self.sharedNamespace.parallelWorkerIDs
+
         #create patchedInputData
 
         #treat the frame pixels in a special way
-        inData = inputData[:, y-self._filterWidth:y+self._filterWidth+1, x-self._filterWidth:x+self._filterWidth+1][:, ::self._stride, ::self._stride].reshape(len(inputData), -1)
-
+        inData = inputData[:, y-self._filterWidth : y+self._filterWidth+1, x-self._filterWidth : x+self._filterWidth+1][:, ::self._stride, ::self._stride].reshape(len(inputData), -1)
         #create target output series
-        outData = outputData[:, y, x].reshape(-1, 1)
+        outData = outputData[:, y-self._filterWidth, x-self._filterWidth].reshape(-1, 1)
 
         #now fit
         X = self.propagate(inData, transientTime, x=self._x[workerID], verbose=0)
@@ -227,30 +277,35 @@ class SpatioTemporalESN(BaseESN):
         trainingPrediction = self.out_activation(B.dot(WOut, X).T)
             
         #store the state and the output matrix of the worker
-        self._fitQueue.put((indices, self._x[workerID].copy(), WOut.copy()))
+        SpatioTemporalESN._fitProcess.fitQueue.put(([x-self._filterWidth for x in indices], self._x[workerID].copy(), WOut.copy()))
 
-        self._fitWorkerIDs.append(workerID)
+        self.parallelWorkerIDs.put(workerID)
 
-    def _preditProcess(self, indices):
-        inputData = self._sharedNamespace.inputData
-        transientTime = self._sharedNamespace.transientTime
+    @staticmethod
+    def _init_predictProcess(predictQueue, self):
+        SpatioTemporalESN._predictProcess.predictQueue = predictQueue
+        SpatioTemporalESN._predictProcess.self = self
+
+    def _predictProcess(self, indices):
+        inputData = self.sharedNamespace.inputData
+        transientTime = self.sharedNamespace.transientTime
 
         y, x = indices
-        workerID = self._predictWorkerIDs[0]
-        self._predictWorkerIDs.pop(0)
+        workerID = self.parallelWorkerIDs.get()
         #get internal id
+ 
         id = self._uniqueIDFromIndices(indices)
 
         #create patchedInputData
         #treat the frame pixels in a special way
         inData = inputData[:, y-self._filterWidth:y+self._filterWidth+1, x-self._filterWidth:x+self._filterWidth+1][:, ::self._stride, ::self._stride].reshape(len(inputData), -1)
 
-        self._x[workerID] = self._xs[id]
+        self._x[workerID] = self.sharedNamespace.xs[id]
 
         #now fit
         X = self.propagate(inData, transientTime, x=self._x[workerID], verbose=0)
-        self._xs[id] = self._x[workerID]
-
+        self.sharedNamespace.xs[id] = self._x[workerID]
+        
         if self._averageOutputWeights:
             WOut = self._WOut
         else:
@@ -260,6 +315,6 @@ class SpatioTemporalESN(BaseESN):
         prediction = self.out_activation(B.dot(WOut, X).T)[:, 0]
             
         #store the state and the output matrix of the worker
-        self._fitQueue.put((indices, prediction))
+        SpatioTemporalESN._predictProcess.predictQueue.put(([x-self._filterWidth for x in indices], prediction))
 
-        self._predictWorkerIDs.append(workerID)
+        self.parallelWorkerIDs.put(workerID)
