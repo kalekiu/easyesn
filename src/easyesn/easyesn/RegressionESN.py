@@ -17,20 +17,20 @@ import progressbar
 class RegressionESN(BaseESN):
     def __init__(self, n_input, n_reservoir, n_output,
                  spectralRadius=1.0, noiseLevel=0.0, inputScaling=None,
-                 leakingRate=1.0, sparseness=0.2, random_seed=None,
+                 leakingRate=1.0, reservoirDensity=0.2, randomSeed=None,
                  out_activation=lambda x: x, out_inverse_activation=lambda x: x,
-                 weight_generation='naive', bias=1.0, output_bias=1.0,
-                 outputInputScaling=1.0, input_density=1.0, solver='pinv', regression_parameters={}, activation = B.tanh):
+                 weightGeneration='naive', bias=1.0, outputBias=1.0,
+                 outputInputScaling=1.0, input_density=1.0, solver='pinv', regressionParameters={}, activation = B.tanh, activationDerivation=lambda x: 1.0/B.cosh(x)**2):
 
         super(RegressionESN, self).__init__(n_input=n_input, n_reservoir=n_reservoir, n_output=n_output, spectralRadius=spectralRadius,
-                                  noiseLevel=noiseLevel, inputScaling=inputScaling, leakingRate=leakingRate, sparseness=sparseness,
-                                  random_seed=random_seed, out_activation=out_activation, out_inverse_activation=out_inverse_activation,
-                                  weight_generation=weight_generation, bias=bias, output_bias=output_bias, outputInputScaling=outputInputScaling,
-                                  input_density=input_density, activation=activation)
+                                  noiseLevel=noiseLevel, inputScaling=inputScaling, leakingRate=leakingRate, reservoirDensity=reservoirDensity,
+                                  randomSeed=randomSeed, out_activation=out_activation, out_inverse_activation=out_inverse_activation,
+                                  weightGeneration=weightGeneration, bias=bias, outputBias=outputBias, outputInputScaling=outputInputScaling,
+                                  input_density=input_density, activation=activation, activationDerivation=activationDerivation)
 
 
         self._solver = solver
-        self._regression_parameters = regression_parameters
+        self._regressionParameters = regressionParameters
 
         """
             allowed values for the solver:
@@ -78,14 +78,14 @@ class RegressionESN(BaseESN):
             bar.finish()
 
         if (self._solver == "pinv"):
-            self._W_out = B.dot(Y_target, B.pinv(self._X))
+            self._WOut = B.dot(Y_target, B.pinv(self._X))
 
             #calculate the training prediction now
-            train_prediction = self.out_activation((B.dot(self._W_out, self._X)).T)
+            train_prediction = self.out_activation((B.dot(self._WOut, self._X)).T)
 
         elif (self._solver == "lsqr"):
             X_T = self._X.T
-            self._W_out = B.dot(B.dot(Y_target, X_T),B.inv(B.dot(self._X,X_T) + self._regression_parameters[0]*B.identity(1+self.n_input+self.n_reservoir)))
+            self._WOut = B.dot(B.dot(Y_target, X_T),B.inv(B.dot(self._X,X_T) + self._regressionParameters[0]*B.identity(1+self.n_input+self.n_reservoir)))
 
             """
                 #alternative represantation of the equation
@@ -96,16 +96,16 @@ class RegressionESN(BaseESN):
 
                 B = np.linalg.inv(np.dot(X, Xt)  + regression_parameter*np.identity(1+self.n_input+self.n_reservoir))
 
-                self._W_out = np.dot(B, A)
-                self._W_out = self._W_out.T
+                self._WOut = np.dot(B, A)
+                self._WOut = self._WOut.T
             """
 
             #calculate the training prediction now
-            train_prediction = self.out_activation(B.dot(self._W_out, self._X).T)
+            train_prediction = self.out_activation(B.dot(self._WOut, self._X).T)
 
         elif (self._solver in ["sklearn_auto", "sklearn_lsqr", "sklearn_sag", "sklearn_svd"]):
             mode = self._solver[8:]
-            params = self._regression_parameters
+            params = self._regressionParameters
             params["solver"] = mode
             self._ridgeSolver = Ridge(**params)
 
@@ -115,7 +115,7 @@ class RegressionESN(BaseESN):
             train_prediction = self.out_activation(self._ridgeSolver.predict(self._X.T))
 
         elif (self._solver in ["sklearn_svr", "sklearn_svc"]):
-            self._ridgeSolver = SVR(**self._regression_parameters)
+            self._ridgeSolver = SVR(**self._regressionParameters)
 
             self._ridgeSolver.fit(self._X.T, Y_target.T.ravel())
 
@@ -153,7 +153,7 @@ class RegressionESN(BaseESN):
             if (self._solver in ["sklearn_auto", "sklearn_lsqr", "sklearn_sag", "sklearn_svd", "sklearn_svr"]):
                 y = self._ridgeSolver.predict(X.T).reshape((self.n_output, -1))
             else:
-                y = B.dot(self._W_out, X)
+                y = B.dot(self._WOut, X)
 
             Y[n] = np.mean(y, 1)
 

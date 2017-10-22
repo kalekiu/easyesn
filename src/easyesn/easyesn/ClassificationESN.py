@@ -18,20 +18,20 @@ from .OneHotEncoder import OneHotEncoder
 class ClassificationESN(BaseESN):
     def __init__(self, n_input, n_reservoir, n_classes,
                  spectralRadius=1.0, noiseLevel=0.0, inputScaling=None,
-                 leakingRate=1.0, sparseness=0.2, random_seed=None,
+                 leakingRate=1.0, reservoirDensity=0.2, randomSeed=None,
                  out_activation=lambda x: 0.1+0.98*x/(1+B.exp(-x)), out_inverse_activation=lambda x: B.log((x*0.98+0.01)/(0.99-x*0.98)),
-                 weight_generation='naive', bias=1.0, output_bias=1.0,
-                 outputInputScaling=1.0, input_density=1.0, solver='pinv', regression_parameters={}, activation = B.tanh):
+                 weight_generation='naive', bias=1.0, outputBias=1.0,
+                 outputInputScaling=1.0, inputDensity=1.0, solver='pinv', regressionParameters={}, activation = B.tanh, activationDerivation=lambda x: 1.0/B.cosh(x)**2):
 
         super(ClassificationESN, self).__init__(n_input=n_input, n_reservoir=n_reservoir, n_output=n_classes, spectralRadius=spectralRadius,
-                                  noiseLevel=noiseLevel, inputScaling=inputScaling, leakingRate=leakingRate, sparseness=sparseness,
-                                  random_seed=random_seed, out_activation=out_activation, out_inverse_activation=out_inverse_activation,
-                                  weight_generation=weight_generation, bias=bias, output_bias=output_bias, outputInputScaling=outputInputScaling,
-                                  input_density=input_density, activation=activation)
+                                  noiseLevel=noiseLevel, inputScaling=inputScaling, leakingRate=leakingRate, reservoirDensity=reservoirDensity,
+                                  randomSeed=randomSeed, out_activation=out_activation, out_inverse_activation=out_inverse_activation,
+                                  weight_generation=weight_generation, bias=bias, outputBias=outputBias, outputInputScaling=outputInputScaling,
+                                  inputDensity=inputDensity, activation=activation, activationDerivation=activationDerivation)
 
 
         self._solver = solver
-        self._regression_parameters = regression_parameters
+        self._regressionParameters = regressionParameters
         self._oneHotEncoder = OneHotEncoder()
 
         """
@@ -94,7 +94,7 @@ class ClassificationESN(BaseESN):
 
         elif (self._solver == "lsqr"):
             X_T = self._X.T
-            self._W_out = B.dot(B.dot(Y_target, X_T),B.inv(B.dot(self._X,X_T) + self._regression_parameters[0]*B.identity(1+self.n_input+self.n_reservoir)))
+            self._W_out = B.dot(B.dot(Y_target, X_T),B.inv(B.dot(self._X,X_T) + self._regressionParameters[0]*B.identity(1+self.n_input+self.n_reservoir)))
 
             """
                 #alternative represantation of the equation
@@ -114,7 +114,7 @@ class ClassificationESN(BaseESN):
 
         elif (self._solver in ["sklearn_auto", "sklearn_lsqr", "sklearn_sag", "sklearn_svd"]):
             mode = self._solver[8:]
-            params = self._regression_parameters
+            params = self._regressionParameters
             params["solver"] = mode
             self._ridgeSolver = Ridge(**params)
 
@@ -124,7 +124,7 @@ class ClassificationESN(BaseESN):
             train_prediction = self.out_activation(self._ridgeSolver.predict(self._X.T))
 
         elif (self._solver in ["sklearn_svr", "sklearn_svc"]):
-            self._ridgeSolver = SVR(**self._regression_parameters)
+            self._ridgeSolver = SVR(**self._regressionParameters)
 
             self._ridgeSolver.fit(self._X.T, Y_target.T.ravel())
 

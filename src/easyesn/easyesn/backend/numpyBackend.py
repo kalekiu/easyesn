@@ -63,6 +63,9 @@ def power(x, y):
 def exp(x):
 	return np.exp(x)
 
+def cosh(x):
+    return np.cosh(x)  
+
 def log(x):
     return np.log(x)
 

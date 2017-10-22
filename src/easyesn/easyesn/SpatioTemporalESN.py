@@ -24,10 +24,10 @@ class SpatioTemporalESN(BaseESN):
     def __init__(self, inputShape, n_reservoir,
                  filterSize=1, stride=1, borderMode="mirror", nWorkers="auto",
                  spectralRadius=1.0, noiseLevel=0.0, inputScaling=None,
-                 leakingRate=1.0, sparseness=0.2, random_seed=None, averageOutputWeights=True,
+                 leakingRate=1.0, reservoirDensity=0.2, randomSeed=None, averageOutputWeights=True,
                  out_activation=lambda x: x, out_inverse_activation=lambda x: x,
-                 weight_generation='naive', bias=1.0, output_bias=1.0,
-                 outputInputScaling=1.0, input_density=1.0, solver='pinv', regression_parameters={}, activation = B.tanh):
+                 weightGeneration='naive', bias=1.0, outputBias=1.0,
+                 outputInputScaling=1.0, input_density=1.0, solver='pinv', regressionParameters={}, activation = B.tanh, activationDerivation=lambda x: 1.0/B.cosh(x)**2):
        
         self._averageOutputWeights = averageOutputWeights
         if averageOutputWeights and solver != "lsqr":
@@ -37,7 +37,7 @@ class SpatioTemporalESN(BaseESN):
         if not borderMode in ["mirror", "padding", "edge", "wrap"]:
             raise ValueError("`borderMode` must be set to one of the following values: `mirror`, `padding`, `edge` or `wrap`.")
 
-        self._regression_parameters = regression_parameters
+        self._regressionParameters = regressionParameters
         self._solver = solver
 
         n_inputDimensions = len(inputShape)
@@ -76,10 +76,10 @@ class SpatioTemporalESN(BaseESN):
                 self.parallelWorkerIDs.put((i))
 
         super(SpatioTemporalESN, self).__init__(n_input=self._n_input, n_reservoir=n_reservoir, n_output=1, spectralRadius=spectralRadius,
-                                  noiseLevel=noiseLevel, inputScaling=inputScaling, leakingRate=leakingRate, sparseness=sparseness,
-                                  random_seed=random_seed, out_activation=out_activation, out_inverse_activation=out_inverse_activation,
-                                  weight_generation=weight_generation, bias=bias, output_bias=output_bias, outputInputScaling=outputInputScaling,
-                                  input_density=input_density, activation=activation)
+                                  noiseLevel=noiseLevel, inputScaling=inputScaling, leakingRate=leakingRate, reservoirDensity=reservoirDensity,
+                                  randomSeed=randomSeed, out_activation=out_activation, out_inverse_activation=out_inverse_activation,
+                                  weightGeneration=weightGeneration, bias=bias, outputBias=outputBias, outputInputScaling=outputInputScaling,
+                                  input_density=input_density, activation=activation, activationDerivation=activationDerivation)
 
         """
             allowed values for the solver:
@@ -278,7 +278,7 @@ class SpatioTemporalESN(BaseESN):
         Y_target = self.out_inverse_activation(outData).T[:, transientTime:]
 
         X_T = X.T
-        WOut = B.dot(B.dot(Y_target, X_T),B.inv(B.dot(X, X_T) + self._regression_parameters[0]*B.identity(1+self.n_input+self.n_reservoir)))
+        WOut = B.dot(B.dot(Y_target, X_T),B.inv(B.dot(X, X_T) + self._regressionParameters[0]*B.identity(1+self.n_input+self.n_reservoir)))
         
         #calculate the training prediction now
         trainingPrediction = self.out_activation(B.dot(WOut, X).T)
