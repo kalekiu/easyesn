@@ -549,9 +549,8 @@ class GradientOptimizer(object):
         return dLr, dSr, dIs, dFs
 
 
-    def optimizeParameterForGenerativeValidationError(self, trainingInputData, trainingOutputData, validationInputData,
-                                            validationOutputData,
-                                            optimizationLength, epochs=1, transientTime=None, verbose=1):
+    def optimizeParameterForGenerativeValidationError(self, trainingInputData, trainingOutputData, validationOutputData,
+                                            epochs=1, transientTime=None, verbose=1):
 
         self._validateReservoir()
 
@@ -563,6 +562,7 @@ class GradientOptimizer(object):
 
         # calculate stuff
         trainLength = trainingInputData.shape[0]
+        optimizationLength = validationOutputData.shape[0]
         if transientTime is None:
             transientTime = self._reservoir.estimateTransientTime(trainingInputData, trainingOutputData)
 
@@ -604,7 +604,7 @@ class GradientOptimizer(object):
 
         # initialize self.designMatrix and self.W_out
         self._reservoir.fit(trainingInputData, trainingOutputData, transientTime=transientTime)
-        oldLoss = hlp.loss(self._reservoir.predict(validationInputData), validationOutputData)
+        oldLoss = hlp.loss(self._reservoir.generate(optimizationLength, trainingInputData[-1]), validationOutputData)
 
         # initialize variables for the "when the error goes up, go back and divide learning rate by 2" mechanism
         oldSR = self._reservoir._spectralRadius
@@ -616,7 +616,7 @@ class GradientOptimizer(object):
         # Calculate uniform matrices
         W_uniform = self._reservoir._W / self._reservoir._spectralRadius
         W_in_uniform = self._reservoir._W_input / self._reservoir._inputScaling
-        W_fb_uniform = self._reservoir._W_fb / self._reservoir._feedbackScaling
+        W_fb_uniform = self._reservoir._W_feedback / self._reservoir._feedbackScaling
 
         if (verbose > 0):
             bar = progressbar.ProgressBar(max_value=epochs, redirect_stdout=True, poll_interval=0.0001)
@@ -676,7 +676,7 @@ class GradientOptimizer(object):
             WoutPrimeIS = self.derivationWoutForP(Ytarget, self._reservoir._X, isGradientsMatrix)
             WoutPrimeFS = self.derivationWoutForP(Ytarget, self._reservoir._X, fsGradientsMatrix)
 
-            y =  trainingOutputData[:,-1]
+            y =  trainingOutputData[-1]
 
             # this time go through validation length
             for t, ytarget in enumerate(validationOutputData):
@@ -757,7 +757,7 @@ class GradientOptimizer(object):
 
             # calculate the errors and update the self.designMatrix and the W_out
             fitLoss = self._reservoir.fit(trainingInputData, trainingOutputData, transientTime=transientTime)
-            validationLoss = hlp.loss(self._reservoir.predict(validationInputData), validationOutputData)
+            validationLoss = hlp.loss(self._reservoir.generate(optimizationLength, trainingInputData[-1]), validationOutputData)
 
             # this is the "when the error goes up, go back and divide learning rate by 2" mechanism
             if validationLoss > oldLoss:

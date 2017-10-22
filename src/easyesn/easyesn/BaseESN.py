@@ -17,7 +17,7 @@ from . import backend as B
 class BaseESN(object):
     def __init__(self, n_input, n_reservoir, n_output,
                  spectralRadius=1.0, noiseLevel=0.01, inputScaling=None,
-                 leakingRate=1.0, sparseness=0.2, random_seed=None,
+                 leakingRate=1.0, feedbackScaling = 1.0, sparseness=0.2, random_seed=None,
                  out_activation=lambda x: x, out_inverse_activation=lambda x: x,
                  weight_generation='naive', bias=1.0, output_bias=1.0, outputInputScaling=1.0,
                  feedback=False, scale_input_matrix=False, input_density=1.0, activation = B.tanh):
@@ -30,6 +30,7 @@ class BaseESN(object):
         self.noise_level = noiseLevel
         self.sparseness = sparseness
         self._leakingRate = leakingRate
+        self._feedbackScaling = feedbackScaling
         self.input_density = input_density
         self._activation = activation
 
@@ -69,6 +70,10 @@ class BaseESN(object):
         self._expanded_inputScaling = B.vstack((1.0, inputScaling.reshape(-1, 1))).flatten()
         self._W_input = self._W_input * ( self._expanded_inputScaling / self._inputScaling )
         self._inputScaling = newInputScaling
+
+    def setFeedbackScaling(self, newFeedbackScaling):
+        self._W_feedback = self._W_feedback * ( newFeedbackScaling / self._feedbackScaling)
+        self._feedbackScaling = newFeedbackScaling
 
 
     def resetState(self):
@@ -210,6 +215,7 @@ class BaseESN(object):
         #create the optional feedback matrix
         if feedback:
             self._W_feedback = B.rand(self.n_reservoir, 1 + self.n_output) - 0.5
+            self._W_feedback *= self._feedbackScaling
         else:
             self._W_feedback = None
 
