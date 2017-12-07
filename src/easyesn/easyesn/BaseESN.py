@@ -44,7 +44,7 @@ class BaseESN(object):
                 raise ValueError("Dimension of inputScaling ({0}) does not match the input data dimension ({1})".format(len(self._inputScaling), n_input))
             self._inputScaling = inputScaling
 
-        self._expandedInputScaling = B.vstack((1.0, inputScaling.reshape(-1,1))).flatten()
+        self._expandedInputScaling = B.vstack((B.array(1.0), inputScaling.reshape(-1,1))).flatten()
 
         self.out_activation = out_activation
         self.out_inverse_activation = out_inverse_activation
@@ -68,7 +68,7 @@ class BaseESN(object):
 
     def setInputScaling(self, newInputScaling):
         inputScaling = B.ones(self.n_input) * self._inputScaling
-        self._expandedInputScaling = B.vstack((1.0, inputScaling.reshape(-1, 1))).flatten()
+        self._expandedInputScaling = B.vstack((B.array(1.0), inputScaling.reshape(-1, 1))).flatten()
         self._WInput = self._WInput * ( self._expandedInputScaling / self._inputScaling )
         self._inputScaling = newInputScaling
 
@@ -108,7 +108,7 @@ class BaseESN(object):
                 u = self.update(inputData[t], x=x)
                 if (t >= transientTime):
                     #add valueset to the states' matrix
-                    X[:,t-transientTime] = B.vstack((self._outputBias, self._outputInputScaling*u, x))[:,0]
+                    X[:,t-transientTime] = B.vstack((B.array(self._outputBias), self._outputInputScaling*u, x))[:,0]
                 if (verbose > 0):
                     bar.update(t)
         else:
@@ -122,13 +122,13 @@ class BaseESN(object):
                     self.update(None, previousOutputData, x=x)
                     if (t >= transientTime):
                         #add valueset to the states' matrix
-                        X[:,t-transientTime] = B.vstack((self._outputBias, x))[:,0]
+                        X[:,t-transientTime] = B.vstack((B.array(self._outputBias), x))[:,0]
                     if outputData is None:
                         #calculate the prediction using the trained model
                         if (self._solver in ["sklearn_auto", "sklearn_lsqr", "sklearn_sag", "sklearn_svd"]):
-                            previousOutputData = self._ridgeSolver.predict(B.vstack((self._outputBias, self._x)).T)
+                            previousOutputData = self._ridgeSolver.predict(B.vstack((B.array(self._outputBias), self._x)).T)
                         else:
-                            previousOutputData = B.dot(self._WOut, B.vstack((self._outputBias, self._x)))
+                            previousOutputData = B.dot(self._WOut, B.vstack((B.array(self._outputBias), self._x)))
                         if t >= transientTime:
                             Y[t-transientTime, :] = previousOutputData
                     else:
@@ -141,13 +141,13 @@ class BaseESN(object):
                     u = self.update(inputData[t], previousOutputData, x=x)
                     if (t >= transientTime):
                         #add valueset to the states' matrix
-                        X[:,t-transientTime] = B.vstack((self._outputBias, self._outputInputScaling*u, x))[:,0]
+                        X[:,t-transientTime] = B.vstack((B.array(self._outputBias), self._outputInputScaling*u, x))[:,0]
                     if outputData is None:
                         #calculate the prediction using the trained model
                         if (self._solver in ["sklearn_auto", "sklearn_lsqr", "sklearn_sag", "sklearn_svd"]):
-                            previousOutputData = self._ridgeSolver.predict(B.vstack((self._outputBias, self._outputInputScaling*u, self._x)).T)
+                            previousOutputData = self._ridgeSolver.predict(B.vstack((B.array(self._outputBias), self._outputInputScaling*u, self._x)).T)
                         else:
-                            previousOutputData = B.dot(self._WOut, B.vstack((self._outputBias, self._outputInputScaling*u, self._x)))
+                            previousOutputData = B.dot(self._WOut, B.vstack((B.array(self._outputBias), self._outputInputScaling*u, self._x)))
                         Y[t, :] = previousOutputData
                     else:
                         previousOutputData = outputData[t]
@@ -188,18 +188,18 @@ class BaseESN(object):
         #naive generation of the matrix W by using random weights
         if weightGeneration == 'naive':
             #random weight matrix from -0.5 to 0.5
-            self._W = rnd.rand(self.n_reservoir, self.n_reservoir) - 0.5
+            self._W = B.array(rnd.rand(self.n_reservoir, self.n_reservoir) - 0.5)
 
             #set sparseness% to zero
             mask = rnd.rand(self.n_reservoir, self.n_reservoir) > self._reservoirDensity
             self._W[mask] = 0.0
 
-            _W_eigenvalues = B.abs(np.linalg.eig(self._W)[0])
+            _W_eigenvalues = B.abs(B.eigenval(self._W)[0])
             self._W *= self._spectralRadius / B.max(_W_eigenvalues)
 
         #generation using the SORM technique (see http://ftp.math.uni-rostock.de/pub/preprint/2012/pre12_01.pdf)
         elif weightGeneration == "SORM":
-            self._W = np.identity(self.n_reservoir)
+            self._W = B.identity(self.n_reservoir)
 
             number_nonzero_elements = self._reservoirDensity * self.n_reservoir * self.n_reservoir
             i = 0
@@ -221,7 +221,7 @@ class BaseESN(object):
 
             #random weight matrix from 0 to 0.5
 
-            self._W = rnd.rand(self.n_reservoir, self.n_reservoir) / 2
+            self._W = B.array(rnd.rand(self.n_reservoir, self.n_reservoir) / 2)
 
             #set sparseness% to zero
             mask = B.rand(self.n_reservoir, self.n_reservoir) > self._reservoirDensity
@@ -241,7 +241,7 @@ class BaseESN(object):
 
             if verbose:
                 M = self._leakingRate*self._W + (1 - self._leakingRate)*np.identity(n=self._W.shape[0])
-                M_eigenvalue = B.max(B.abs(np.linalg.eig(M)[0]))#np.max(np.abs(sp.sparse.linalg.eigs(M, k=1)[0]))
+                M_eigenvalue = B.max(B.abs(B.eigenval(M)[0]))#np.max(np.abs(sp.sparse.linalg.eigs(M, k=1)[0]))
                 print("eff. spectral radius: {0}".format(M_eigenvalue))
 
             #change random signs
@@ -282,7 +282,7 @@ class BaseESN(object):
         if x is None:
             x = self._x
 
-        return B.dot(self._WInput, B.vstack((self._bias, u))) + B.dot(self._W, x)
+        return B.dot(self._WInput, B.vstack((B.array(self._bias), u))) + B.dot(self._W, x)
 
     """
         Updates the inner states. Returns the UNSCALED but reshaped input of this step.
@@ -313,7 +313,7 @@ class BaseESN(object):
                 transmission = self.calculateLinearNetworkTransmissions(u, x)
                 x *= (1.0-self._leakingRate)
                 x += self._leakingRate*self._activation(transmission +
-                     B.dot(self._WFeedback, B.vstack((self._outputBias, outputData))) + (B.rand()-0.5)*self._noiseLevel)
+                     B.dot(self._WFeedback, B.vstack((B.array(self._outputBias), outputData))) + (B.rand()-0.5)*self._noiseLevel)
 
                 return u
             else:
@@ -322,7 +322,7 @@ class BaseESN(object):
                 #update the states
                 transmission = B.dot(self._W, x)
                 x *= (1.0-self._leakingRate)
-                x += self._leakingRate*self._activation(transmission + B.dot(self._WFeedback, B.vstack((self._outputBias, outputData))) +
+                x += self._leakingRate*self._activation(transmission + B.dot(self._WFeedback, B.vstack((B.array(self._outputBias), outputData))) +
                      (B.rand()-0.5)*self._noiseLevel)
 
                 return np.empty((0, 1))
