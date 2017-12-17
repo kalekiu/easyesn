@@ -1,11 +1,30 @@
-# Easyesn
-Easyesn is a library for recurrent neural networks using echo state networks (ESNs also calles reservoir computing) with a high level easy to use API that is closely oriented towards sklearn. It aims to make the use of ESN as easy as possible, by providing algorithms for automatic gradient based hyperparameter tuning (of ridge regression penalty, spectral radius, leaking rate and feedback scaling), as well as transient time estimation. Furtheremore it incorporates the ability to use spatio temporal ESNs for prediction and classification of geometrically extended input signals. 
+# easyesn
+`easyesn` is a library for recurrent neural networks using echo state networks (`ESN`s,  also called `reservoir computing`) with a high level easy to use API that is closely oriented towards `sklearn`. It aims to make the use of `ESN` as easy as possible, by providing algorithms for automatic gradient based hyperparameter tuning (of ridge regression penalty, spectral radius, leaking rate and feedback scaling), as well as transient time estimation. Furtheremore, it incorporates the ability to use spatio temporal `ESN`s for prediction and classification of geometrically extended input signals. 
 
-Easyesn can either use the CPU or make use of the GPU thanks to cupy. At the moment the use of the CPU is recommended though!
+`easyesn` can either use the CPU or make use of the GPU thanks to `cupy`. At the moment the use of the CPU is recommended though!
 
 This project is based on research results for the gradient based hyperparameter optimization and transient time estimation of Luca Thiede and the spatio temporal prediction and classification techniques of Roland Zimmermann.
 
 # Getting started
+
+## Installation
+The `easyesn` library is built using `python 3`. You cannot use it in a `python 2.x` environment. The recommended way to install `easyesn` at the moment is via `pip`. Nevertheless, you can also install `easyesn` on you own without `pip`.
+
+### pip
+You can install `easyesn` via `pip` by executing
+```
+pip install easyesn
+```  
+from a valid `python 3.x` environment, which will automatically install `easyesn` and its dependencies.
+
+### manually
+To install the library without `pip`, there are four steps you have to perform: 
+1. Go to the `pypi` [page](https://pypi.python.org/pypi/easyesn) of `easyesn` and download the latest version as a `*.tar.gz` archive.
+2. Extract the archive.
+3. Open your command line/terminal and cd into the directory containing the `setup.py`.
+4. Execute `python setup.py install` to start the installation.
+
+## First steps
 As already mentioned, the API is very similar to the one of sklearn, which makes it as easy as possible for beginners. 
 For every task there is a specialized module, e.g. `ClassificationESN` for the classification of input signals, `RegressionESN` for the prediction or generation (that is a several step ahead prediction by always feeding the previous prediction back in) or `SpatioTemporalESN` for the prediction of geometrically extended input signals (for example the electric excitation on the heart surface or video frames).
 
@@ -42,12 +61,27 @@ validationLosses, fitLosses, penalties = opt.optimizePenalty(inputDataTraining, 
 ```
 More extensive examples can be found in the examples directory.
 
-## Installation
-### pip
+## Backends
+As already mentioned in the beginning, `easyesn` can be used either on the CPU or on the GPU. To achieve this, all low level calculations are outsourced into  a backend (similiar to the backend technology of `keras`). To change the `backend` to another backend named `backendName`, there are currently two ways:
 
-### Build on your own
+1. Modify the settings file, stored at `~/.easyesn/easyesn.json` to contain to look like this:
+    ```json
+    {
+        "backend": "backendName"
+    }
+    ``` 
+    and use `easyesn` without any further modification inside your code.
 
-## First steps
+2. Set the `EASYESN_BACKEND` environment variable to `backendName` and use `easyesn` without any further modification inside your code.
+
+At the moment, these are supported backend names:
+
+| backend name | backend type |
+| ------------ |:------------:|
+|   `numpy`    | `numpy` (CPU)|
+|   `np`    | `numpy` (CPU)|
+|   `cupy`    | `cupy` (GPU)|
+|   `cp`    | `cupy` (GPU)|
 
 # Documentation
 
