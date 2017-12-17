@@ -64,6 +64,11 @@ class PredictionESN(BaseESN):
                 raise ValueError("n_input has been set to zero. Therefore, the given inputData will not be used.")
             trainLength = outputData.shape[0]
 
+        if len(outputData.shape) == 1:
+            outputData = outputData.reshape(-1, 1)
+
+        inputData = B.array(inputData)
+        outputData = B.array(outputData)
         
         self.resetState()
 
@@ -131,6 +136,11 @@ class PredictionESN(BaseESN):
         #if (self.n_input != self.n_output):
         #    raise ValueError("n_input does not equal n_output. The generation mode uses its own output as its input. Therefore, n_input has to be equal to n_output - please adjust these numbers!")
 
+        if inputData is not None:
+            inputData = B.array(inputData)
+        if initialData is not None:
+            initialData = B.array(initialData)
+
         #let some input run through the ESN to initialize its states from a new starting value
         if not continuation:
             self._x = B.zeros(self._x.shape)
@@ -163,6 +173,8 @@ class PredictionESN(BaseESN):
         Use the ESN in the predictive mode to predict the output signal by using an input signal.
     """
     def predict(self, inputData, continuation=True, initialData=None, update_processor=lambda x:x, verbose=0):
+        inputData = B.array(inputData)
+        
         #let some input run through the ESN to initialize its states from a new starting value
         if (not continuation):
             self._x = B.zeros(self._x.shape)
