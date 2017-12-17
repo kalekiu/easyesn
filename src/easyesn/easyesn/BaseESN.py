@@ -327,6 +327,76 @@ class BaseESN(object):
 
                 return np.empty((0, 1))
 
+
+
+    def isEpsilonClose(self, x, epsilon):
+        for i in range(x.shape[0]):
+            for j in range(x.shape[0]):
+                if not B.all( B.abs( x[i] - x[j] ) < epsilon ):
+                    return False
+
+        return True
+
+
+    def calculateTransientTime(self, inputs, epsilon, proximityLength = 50):
+        x = B.empty((2, self.n_reservoir, 1))
+        x[0] = B.zeros((self.n_reservoir, 1))
+        x[1] = B.ones((self.n_reservoir, 1))
+
+        return self._calculateTransientTime(x, inputs, epsilon, proximityLength)
+
+    def _calculateTransientTime(self, x, inputs, outputs, epsilon, proximityLength = 50):
+        c = 0
+        length = inputs.shape[0] if inputs is not None else outputs.shape[0]
+        for t in range(length):
+            if self.isEpsilonClose(x, epsilon):
+                if c >= proximityLength:
+                    return t - proximityLength
+                else:
+                    c = c + 1
+            else:
+                c = 0
+
+            u = inputs[t].reshape(-1, 1) if inputs is not None else None
+            o = outputs[t].reshape(-1, 1) if inputs is not None else None
+            for x_i in x:
+                x_i = self.update(u, o, x_i)
+
+    def getStateAtGivenPoint(self, inputs, outputs, point):
+        x = B.zeros((self._noiseLevel, 1))
+
+        length = inputs.shape[0] if inputs is not None else outputs.shape[0]
+        for t in range(length):
+            u = inputs[t].reshape(-1, 1) if inputs is not None else None
+            o = outputs[t].reshape(-1, 1) if inputs is not None else None
+            self.update(u, o, x)
+            if t == point:
+                return x
+
+    def estimated_autocorrelation(self, x):
+        n = x.shape[0]
+        variance = B.var(x)
+        x = x - B.mean(x)
+        r = B.correlate(x, x, mode='full')[-n:]
+        assert np.allclose(r, np.array([(x[:n - k] * x[-(n - k):]).sum() for k in range(n)]))
+        result = r / (variance * (np.arange(n, 0, -1)))
+        return result
+
+    def SWD(self, series, intervall):
+        differences = np.zeros(series.shape[0] - 2 * intervall)
+        reference_series = series[:intervall]
+        for i in range(intervall, series.shape[0] - intervall):
+            differences[i - intervall] = int(np.sum(np.abs(reference_series - series[i:i + intervall])))
+
+        return np.argmin(differences) + intervall, differences
+
+
+
+    def reduceTransientTime(self):
+        pass
+
+
+
     """
         Saves the ESN by pickling it.
     """

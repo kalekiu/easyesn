@@ -83,3 +83,12 @@ def argmax(x, axis):
 
 def zeros_like(x):
     return np.zeros_like(x)
+
+def all(x):
+	return np.all(x)
+
+def correlate(a, v, mode='valid'):
+	return np.correlate(a, v, mode='valid')
+
+def var(x):
+	return np.var(x)
