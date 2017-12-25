@@ -8,7 +8,7 @@ This project is based on research results for the gradient based hyperparameter 
 # Getting started
 
 ## Installation
-The `easyesn` library is built using `python 3`. You cannot use it in a `python 2.x` environment. The recommended way to install `easyesn` at the moment is via `pip`. Nevertheless, you can also install `easyesn` on you own without `pip`.
+The `easyesn` library is built using `python 3`. You cannot use it in a `python 2.x` environment. The recommended way to install `easyesn` at the moment is via `pip`. Nevertheless, you can also install `easyesn` on your own without `pip`.
 
 ### pip
 You can install `easyesn` via `pip` by executing
@@ -26,11 +26,11 @@ To install the library without `pip`, there are four steps you have to perform:
 
 ## First steps
 As already mentioned, the API is very similar to the one of sklearn, which makes it as easy as possible for beginners. 
-For every task there is a specialized module, e.g. `ClassificationESN` for the classification of input signals, `RegressionESN` for the prediction or generation (that is a several step ahead prediction by always feeding the previous prediction back in) or `SpatioTemporalESN` for the prediction of geometrically extended input signals (for example the electric excitation on the heart surface or video frames).
+For every task there is a specialized module, e.g. `ClassificationESN` for the classification of input signals, `PredictionESN` for the prediction or generation (that is a several step ahead prediction by always feeding the previous prediction back in), `RegressionESN` for mapping a signal to a real number, or `SpatioTemporalESN` for the prediction of geometrically extended input signals (for example the electric excitation on the heart surface or video frames).
 
 Import the module typing
 ```python
-from easyesn import RegressionESN
+from easyesn import PredictionESN
 ```
 Now simply fit the esn using
 ```python
