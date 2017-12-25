@@ -48,7 +48,7 @@ class RegressionESN(BaseESN):
         Fits the ESN so that by applying a time series out of inputData the outputData will be produced.
 
     """
-    def fit(self, inputData, outputData, transientTime=0, verbose=0):
+    def fit(self, inputData, outputData, transientTime="AutoReduce", transientTimeCalculationEpsilon = 1e-3, transientTimeCalculationLength = 20, verbose=0):
         #check the input data
         if inputData.shape[0] != outputData.shape[0]:
             raise ValueError("Amount of input and output datasets is not equal - {0} != {1}".format(inputData.shape[0], outputData.shape[0]))
@@ -57,6 +57,18 @@ class RegressionESN(BaseESN):
         trainingLength = inputData.shape[1]
 
         self._x = B.zeros((self.n_reservoir,1))
+
+        # Automatic transient time calculations
+        if transientTime == "Auto":
+            transientTime = self.calculateTransientTime(inputData, outputData, transientTimeCalculationEpsilon,
+                                                        transientTimeCalculationLength)
+        if transientTime == "AutoReduce":
+            if (inputData is None and outputData.shape[1] == 1) or inputData.shape[1] == 1:
+                transientTime = self.calculateTransientTime(inputData, outputData, transientTimeCalculationEpsilon,
+                                                            transientTimeCalculationLength)
+                transientTime = self.reduceTransientTime(inputData, outputData, transientTime)
+            else:
+                print("Transient time reduction is supported only for 1 dimensional input.")
 
         self._X = B.zeros((1 + self.n_input + self.n_reservoir, nSequences*(trainingLength-transientTime)))
         Y_target = B.zeros((self.n_output, (trainingLength-transientTime)*nSequences))

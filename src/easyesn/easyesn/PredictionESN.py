@@ -53,7 +53,7 @@ class PredictionESN(BaseESN):
     """
         Fits the ESN so that by applying the inputData the outputData will be produced.
     """
-    def fit(self, inputData, outputData, transientTime=0, verbose=0):
+    def fit(self, inputData, outputData, transientTime="AutoReduce", transientTimeCalculationEpsilon = 1e-3, transientTimeCalculationLength = 20, verbose=0):
         #check the input data
         if self.n_input != 0:
             if inputData.shape[0] != outputData.shape[0]:
@@ -67,10 +67,23 @@ class PredictionESN(BaseESN):
         if len(outputData.shape) == 1:
             outputData = outputData.reshape(-1, 1)
 
-        inputData = B.array(inputData)
-        outputData = B.array(outputData)
+        if inputData is not None:
+            inputData = B.array(inputData)
+        if outputData is not None:
+            outputData = B.array(outputData)
         
         self.resetState()
+
+        # Automatic transient time calculations
+        if transientTime == "Auto":
+            transientTime = self.calculateTransientTime(inputData, outputData, transientTimeCalculationEpsilon, transientTimeCalculationLength)
+        if transientTime == "AutoReduce":
+            if (inputData is None and outputData.shape[1] == 1) or inputData.shape[1] == 1:
+                transientTime = self.calculateTransientTime(inputData, outputData, transientTimeCalculationEpsilon, transientTimeCalculationLength)
+                transientTime = self.reduceTransientTime(inputData, outputData, transientTime)
+            else:
+                print("Transient time reduction is supported only for 1 dimensional input.")
+
 
         self._X = self.propagate(inputData, outputData, transientTime, verbose)
 
@@ -156,7 +169,6 @@ class PredictionESN(BaseESN):
                 for t in range(initialDataInput.shape[0]):
                     super(PredictionESN, self).update(initialDataInput[t], initialDataOutput[t])
 
-        predictionLength = n
         if self.n_input != 0:
             if inputData is None:
                 raise ValueError("inputData must not be None.")
@@ -193,7 +205,6 @@ class PredictionESN(BaseESN):
 
                     super(PredictionESN, self).update(initialDataInput[t], initialDataOutput[t])
 
-        predLength = inputData.shape[0]
 
         X = self.propagate(inputData, verbose=verbose)
 

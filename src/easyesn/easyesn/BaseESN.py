@@ -331,19 +331,24 @@ class BaseESN(object):
 
     def isEpsilonClose(self, x, epsilon):
         for i in range(x.shape[0]):
-            for j in range(x.shape[0]):
+            for j in range(i, x.shape[0]):
                 if not B.all( B.abs( x[i] - x[j] ) < epsilon ):
                     return False
 
         return True
 
 
-    def calculateTransientTime(self, inputs, epsilon, proximityLength = 50):
-        x = B.empty((2, self.n_reservoir, 1))
-        x[0] = B.zeros((self.n_reservoir, 1))
-        x[1] = B.ones((self.n_reservoir, 1))
+    def calculateTransientTime(self, inputs, outputs, epsilon, proximityLength = None):
+        length = inputs.shape[0] if inputs is not None else outputs.shape[0]
+        if proximityLength is None:
+            proximityLength = int(length * 0.1)
+            if proximityLength < 3:
+                proximityLength = 3
+        initial_x = B.empty((2, self.n_reservoir, 1))
+        initial_x[0] = - B.ones((self.n_reservoir, 1))
+        initial_x[1] = B.ones((self.n_reservoir, 1))
 
-        return self._calculateTransientTime(x, inputs, epsilon, proximityLength)
+        return self._calculateTransientTime(initial_x, inputs, outputs, epsilon, proximityLength)
 
     def _calculateTransientTime(self, x, inputs, outputs, epsilon, proximityLength = 50):
         c = 0
@@ -358,17 +363,17 @@ class BaseESN(object):
                 c = 0
 
             u = inputs[t].reshape(-1, 1) if inputs is not None else None
-            o = outputs[t].reshape(-1, 1) if inputs is not None else None
-            for x_i in x:
-                x_i = self.update(u, o, x_i)
+            o = outputs[t].reshape(-1, 1) if outputs is not None else None
+            for i in range(x.shape[0]):
+                self.update(u, o, x[i])
 
     def getStateAtGivenPoint(self, inputs, outputs, point):
-        x = B.zeros((self._noiseLevel, 1))
+        x = B.zeros((self.n_reservoir, 1))
 
         length = inputs.shape[0] if inputs is not None else outputs.shape[0]
         for t in range(length):
             u = inputs[t].reshape(-1, 1) if inputs is not None else None
-            o = outputs[t].reshape(-1, 1) if inputs is not None else None
+            o = outputs[t].reshape(-1, 1) if outputs is not None else None
             self.update(u, o, x)
             if t == point:
                 return x
@@ -391,9 +396,52 @@ class BaseESN(object):
         return np.argmin(differences) + intervall, differences
 
 
+    def getEquilibriumState(self, inputs, outputs, epsilon = 1e-3):
+        x = B.empty((2, self.n_reservoir, 1))
+        while not self.isEpsilonClose(x, epsilon):
+            x[0] = x[1]
+            u = inputs[0].reshape(-1, 1) if inputs is not None else None
+            o = outputs[0].reshape(-1, 1) if outputs is not None else None
+            self.update(u, o, x[1])
 
-    def reduceTransientTime(self):
-        pass
+        return x[1]
+
+
+    def reduceTransientTime(self, inputs, outputs, initialTransientTime, epsilon = 1e-3, proximityLength = 50):
+        length = inputs.shape[0] if inputs is not None else outputs.shape[0]
+        if proximityLength is None:
+            proximityLength = int(length * 0.1)
+            if proximityLength < 3:
+                proximityLength = 3
+        print(proximityLength)
+        x = B.empty((2, self.n_reservoir, 1))
+        equilibriumState = self.getEquilibriumState(inputs, outputs)
+        if inputs is None:
+            swdPoint, _ = self.SWD(outputs, int(initialTransientTime*0.8))
+        else:
+            swdPoint, _ = self.SWD(inputs, int(initialTransientTime * 0.8))
+        swdState = self.getStateAtGivenPoint(inputs, outputs, swdPoint)
+        x[0] = equilibriumState
+        x[1] = swdState
+        transientTime = 0
+        c = 0
+        for t in range(length):
+            if self.isEpsilonClose(x, epsilon):
+                c = c + 1
+                if c > proximityLength:
+                    transientTime = t - proximityLength
+                    break
+            else:
+                c = 0
+
+            for i in range(x.shape[0]):
+                u = inputs[t].reshape(-1, 1) if inputs is not None else None
+                o = outputs[t].reshape(-1, 1) if outputs is not None else None
+                self.update(u, o, x[i])
+
+
+        self._x = x[0]
+        return transientTime
 
 
 
