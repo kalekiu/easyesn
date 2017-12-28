@@ -224,7 +224,7 @@ class PredictionESN(BaseESN):
         return Y.T
 
     def optimize(self, trainingInput, trainingOutput, validationInput, validationOutput, verbose):
-        gridSearch = GridSearch()
+        gridSearch = GridSearchOptimizer()
         gradientOptimizer = GradientOptimizer()
         pipe = Pipeline(gridSearch, gradientOptimizer)
 
