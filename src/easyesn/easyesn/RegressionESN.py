@@ -79,7 +79,7 @@ class RegressionESN(BaseESN):
 
         for n in range(len(inputData)):
             self._x = B.zeros((self.n_reservoir, 1))
-            self._X[:, n*(trainingLength-transientTime):(n+1)*(trainingLength-transientTime)] = self.propagate(inputData[n], transientTime, verbose=0)
+            self._X[:, n*(trainingLength-transientTime):(n+1)*(trainingLength-transientTime)] = self.propagate(inputData[n], transientTime=transientTime, verbose=0)
             #set the target values
             Y_target[:, n*(trainingLength-transientTime):(n+1)*(trainingLength-transientTime)] = np.tile(self.out_inverse_activation(outputData[n]), trainingLength-transientTime).T
 

@@ -327,109 +327,43 @@ class BaseESN(object):
 
                 return np.empty((0, 1))
 
-
-    def isEpsilonClose(self, x, epsilon):
-        # x: np array of shape(number of state, dimension of single state, 1)
-        # epsilon: a given constant
-        # checks wheter each of the input differs in any of its components more than epsilon to any of the other states, if yes returns false
-        for i in range(x.shape[0]):
-            for j in range(i, x.shape[0]):
-                if not B.all( B.abs( x[i] - x[j] ) < epsilon ):
-                    return False
-
-        return True
-
-
     def calculateTransientTime(self, inputs, outputs, epsilon, proximityLength = None):
         # inputs: input of reserovoir
         # outputs: output of reservoir
         # epsilon: given constant
         # proximity length: number of steps for which all states have to be epsilon close to declare convergance
         # initializes two initial states as far as possible from each other in [-1,1] regime and tests when they converge-> this is transient time
+
         length = inputs.shape[0] if inputs is not None else outputs.shape[0]
         if proximityLength is None:
             proximityLength = int(length * 0.1)
             if proximityLength < 3:
                 proximityLength = 3
+
         initial_x = B.empty((2, self.n_reservoir, 1))
         initial_x[0] = - B.ones((self.n_reservoir, 1))
         initial_x[1] = B.ones((self.n_reservoir, 1))
 
-        return self._calculateTransientTime(initial_x, inputs, outputs, epsilon, proximityLength)
-
-    def _calculateTransientTime(self, x, inputs, outputs, epsilon, proximityLength = 50):
-        # x: np array of initial states as (number of iniitial states, dimension of states, 1)
-        # inputs: input of reserovoir
-        # outputs: output of reservoir
-        # epsilon: given constant
-        # proximity length: number of steps for which all states have to be epsilon close to declare convergance
-        # tests when given states converge
-        c = 0
+        countedConsecutiveSteps = 0
         length = inputs.shape[0] if inputs is not None else outputs.shape[0]
         for t in range(length):
-            if self.isEpsilonClose(x, epsilon):
-                if c >= proximityLength:
+            if B.max(B.ptp(initial_x, axis=0)) < epsilon:
+                if countedConsecutiveSteps >= proximityLength:
                     return t - proximityLength
                 else:
-                    c = c + 1
+                    countedConsecutiveSteps += 1
             else:
-                c = 0
+                countedConsecutiveSteps = 0
 
             u = inputs[t].reshape(-1, 1) if inputs is not None else None
             o = outputs[t].reshape(-1, 1) if outputs is not None else None
-            for i in range(x.shape[0]):
-                self.update(u, o, x[i])
+            for i in range(initial_x.shape[0]):
+                self.update(u, o, initial_x[i])
 
-    def getStateAtGivenPoint(self, inputs, outputs, point):
-        # inputs: input of reserovoir
-        # outputs: output of reservoir
-        # point at which the state is wanted
-        # propagates the inputs/outputs till given point in time and returns the state of the reservoir at this point
-        x = B.zeros((self.n_reservoir, 1))
+        #transient time could not be determined
+        raise ValueError("Transient time could not be determined - maybe the proximityLength is too big.")       
 
-        length = inputs.shape[0] if inputs is not None else outputs.shape[0]
-        for t in range(length):
-            u = inputs[t].reshape(-1, 1) if inputs is not None else None
-            o = outputs[t].reshape(-1, 1) if outputs is not None else None
-            self.update(u, o, x)
-            if t == point:
-                return x
-
-    def estimated_autocorrelation(self, x):
-        # estimates autocorrelation of given np array x
-        n = x.shape[0]
-        variance = B.var(x)
-        x = x - B.mean(x)
-        r = B.correlate(x, x, mode='full')[-n:]
-        assert np.allclose(r, np.array([(x[:n - k] * x[-(n - k):]).sum() for k in range(n)]))
-        result = r / (variance * (np.arange(n, 0, -1)))
-        return result
-
-    def SWD(self, series, intervall):
-        # calculates SWD with intervall and returns point of minimum as first return and the whole SWD sereis as second return
-        differences = np.zeros(series.shape[0] - 2 * intervall)
-        reference_series = series[:intervall]
-        for i in range(intervall, series.shape[0] - intervall):
-            differences[i - intervall] = int(np.sum(np.abs(reference_series - series[i:i + intervall])))
-
-        return np.argmin(differences) + intervall, differences
-
-
-    def getEquilibriumState(self, inputs, outputs, epsilon = 1e-3):
-        # inputs: input of reserovoir
-        # outputs: output of reservoir
-        # epsilon: given constant
-        # returns the equilibrium state when esn is fed with the first state of input
-        x = B.empty((2, self.n_reservoir, 1))
-        while not self.isEpsilonClose(x, epsilon):
-            x[0] = x[1]
-            u = inputs[0].reshape(-1, 1) if inputs is not None else None
-            o = outputs[0].reshape(-1, 1) if outputs is not None else None
-            self.update(u, o, x[1])
-
-        return x[1]
-
-
+ 
     def reduceTransientTime(self, inputs, outputs, initialTransientTime, epsilon = 1e-3, proximityLength = 50):
         # inputs: input of reserovoir
         # outputs: output of reservoir
@@ -438,42 +372,75 @@ class BaseESN(object):
         # initialTransientTime: transient time with calculateTransientTime() method estimated
         # finds initial state with lower transient time and sets internal state to this state
         # returns the new transient time by calculating the convergence time of initial states found with SWD and Equilibrium method
+ 
+        def getEquilibriumState(self, inputs, outputs, epsilon = 1e-3):
+            # inputs: input of reserovoir
+            # outputs: output of reservoir
+            # epsilon: given constant
+            # returns the equilibrium state when esn is fed with the first state of input
+            x = B.empty((2, self.n_reservoir, 1))
+            while not B.max(B.ptp(x, axis=0)) < epsilon:
+                x[0] = x[1]
+                u = inputs[0].reshape(-1, 1) if inputs is not None else None
+                o = outputs[0].reshape(-1, 1) if outputs is not None else None
+                self.update(u, o, x[1])
+
+            return x[1]
+
+        def getStateAtGivenPoint(self, inputs, outputs, targetTime):
+            # inputs: input of reserovoir
+            # outputs: output of reservoir
+            # targetTime: time at which the state is wanted
+            # propagates the inputs/outputs till given point in time and returns the state of the reservoir at this point
+            x = B.zeros((self.n_reservoir, 1))
+
+            length = inputs.shape[0] if inputs is not None else outputs.shape[0]
+            length = min(length, targetTime)
+            for t in range(length):
+                u = inputs[t].reshape(-1, 1) if inputs is not None else None
+                o = outputs[t].reshape(-1, 1) if outputs is not None else None
+                self.update(u, o, x)
+        
+            return x
+
         length = inputs.shape[0] if inputs is not None else outputs.shape[0]
         if proximityLength is None:
             proximityLength = int(length * 0.1)
             if proximityLength < 3:
                 proximityLength = 3
-        print(proximityLength)
+     
         x = B.empty((2, self.n_reservoir, 1))
-        equilibriumState = self.getEquilibriumState(inputs, outputs)
+        equilibriumState = getEquilibriumState(inputs, outputs)
+     
         if inputs is None:
-            swdPoint, _ = self.SWD(outputs, int(initialTransientTime*0.8))
+            swdPoint, _ = hp.SWD(outputs, int(initialTransientTime*0.8))
         else:
-            swdPoint, _ = self.SWD(inputs, int(initialTransientTime * 0.8))
-        swdState = self.getStateAtGivenPoint(inputs, outputs, swdPoint)
+            swdPoint, _ = hp.SWD(inputs, int(initialTransientTime * 0.8))
+        
+        swdState = getStateAtGivenPoint(inputs, outputs, swdPoint)
+        
         x[0] = equilibriumState
         x[1] = swdState
+        
         transientTime = 0
-        c = 0
+
+        countedConsecutiveSteps = 0
         for t in range(length):
-            if self.isEpsilonClose(x, epsilon):
-                c = c + 1
-                if c > proximityLength:
+            if B.max(B.ptp(x, axis=0)) < epsilon:
+                countedConsecutiveSteps += 1
+                if countedConsecutiveSteps > proximityLength:
                     transientTime = t - proximityLength
                     break
             else:
-                c = 0
+                countedConsecutiveSteps = 0
 
+            u = inputs[t].reshape(-1, 1) if inputs is not None else None
+            o = outputs[t].reshape(-1, 1) if outputs is not None else None
             for i in range(x.shape[0]):
-                u = inputs[t].reshape(-1, 1) if inputs is not None else None
-                o = outputs[t].reshape(-1, 1) if outputs is not None else None
                 self.update(u, o, x[i])
-
 
         self._x = x[0]
         return transientTime
-
-
 
     """
         Saves the ESN by pickling it.

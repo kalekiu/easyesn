@@ -88,3 +88,8 @@ At the moment, these are supported backend names:
 # Develop
 
 ## Todo
+At the moment the `easyesn` library covers not only all basic features of reservoir computing but also some new, state of the art methods for its application. Nevertheless, there are still some more things which should be implemented in future versions. In the following, these feature requests and ideas are listed together which their progress:
+
+- Ensemble ESNs (25%)
+- Adding support for deep learning methods as the output method (still open)
+- Improved GPU computing performance (still open)
