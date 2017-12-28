@@ -108,3 +108,6 @@ src\easyesn\easyesn.egg-info
 src\easyesn\easyesn.egg-info\*
 src\easyesn\dist
 src\easyesn\dist\*
+
+.vs
+/src/.vs
