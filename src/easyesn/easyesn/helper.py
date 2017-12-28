@@ -49,5 +49,30 @@ def calculate_esn_mi_input_scaling(input_data, output_data):
     return scaling
 
 
+"""
+    Estimates autocorrelation of given np array x
+"""
+def autocorrelation(self, x):
+    n = x.shape[0]
+    variance = B.var(x)
+    x = x - B.mean(x)
+    r = B.correlate(x, x, mode='full')[-n:]
+    assert B.allclose(r, np.array([(x[:n - k] * x[-(n - k):]).sum() for k in range(n)]))
+    result = r / (variance * (np.arange(n, 0, -1)))
+    return result
+
+"""
+    Calculates SWD (sliding window difference) with the specified intervall using the first `interval` entries of the series as the window
+    Returns a tuple consisting of the point of minimum and the whole SWD series
+"""
+def SWD(self, series, intervall):
+    differences = np.zeros(series.shape[0] - 2 * intervall)
+    reference_series = series[:intervall]
+    for i in range(intervall, series.shape[0] - intervall):
+        differences[i - intervall] = np.sum(np.abs(reference_series - series[i:i + intervall]))
+
+    return np.argmin(differences) + intervall, differences
+
+
 def loss(prediction, target):
     return np.mean( ( prediction - target ) ** 2 )
