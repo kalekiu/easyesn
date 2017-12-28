@@ -328,8 +328,10 @@ class BaseESN(object):
                 return np.empty((0, 1))
 
 
-
     def isEpsilonClose(self, x, epsilon):
+        # x: np array of shape(number of state, dimension of single state, 1)
+        # epsilon: a given constant
+        # checks wheter each of the input differs in any of its components more than epsilon to any of the other states, if yes returns false
         for i in range(x.shape[0]):
             for j in range(i, x.shape[0]):
                 if not B.all( B.abs( x[i] - x[j] ) < epsilon ):
@@ -339,6 +341,11 @@ class BaseESN(object):
 
 
     def calculateTransientTime(self, inputs, outputs, epsilon, proximityLength = None):
+        # inputs: input of reserovoir
+        # outputs: output of reservoir
+        # epsilon: given constant
+        # proximity length: number of steps for which all states have to be epsilon close to declare convergance
+        # initializes two initial states as far as possible from each other in [-1,1] regime and tests when they converge-> this is transient time
         length = inputs.shape[0] if inputs is not None else outputs.shape[0]
         if proximityLength is None:
             proximityLength = int(length * 0.1)
@@ -351,6 +358,12 @@ class BaseESN(object):
         return self._calculateTransientTime(initial_x, inputs, outputs, epsilon, proximityLength)
 
     def _calculateTransientTime(self, x, inputs, outputs, epsilon, proximityLength = 50):
+        # x: np array of initial states as (number of iniitial states, dimension of states, 1)
+        # inputs: input of reserovoir
+        # outputs: output of reservoir
+        # epsilon: given constant
+        # proximity length: number of steps for which all states have to be epsilon close to declare convergance
+        # tests when given states converge
         c = 0
         length = inputs.shape[0] if inputs is not None else outputs.shape[0]
         for t in range(length):
@@ -368,6 +381,10 @@ class BaseESN(object):
                 self.update(u, o, x[i])
 
     def getStateAtGivenPoint(self, inputs, outputs, point):
+        # inputs: input of reserovoir
+        # outputs: output of reservoir
+        # point at which the state is wanted
+        # propagates the inputs/outputs till given point in time and returns the state of the reservoir at this point
         x = B.zeros((self.n_reservoir, 1))
 
         length = inputs.shape[0] if inputs is not None else outputs.shape[0]
@@ -379,6 +396,7 @@ class BaseESN(object):
                 return x
 
     def estimated_autocorrelation(self, x):
+        # estimates autocorrelation of given np array x
         n = x.shape[0]
         variance = B.var(x)
         x = x - B.mean(x)
@@ -388,6 +406,7 @@ class BaseESN(object):
         return result
 
     def SWD(self, series, intervall):
+        # calculates SWD with intervall and returns point of minimum as first return and the whole SWD sereis as second return
         differences = np.zeros(series.shape[0] - 2 * intervall)
         reference_series = series[:intervall]
         for i in range(intervall, series.shape[0] - intervall):
@@ -397,6 +416,10 @@ class BaseESN(object):
 
 
     def getEquilibriumState(self, inputs, outputs, epsilon = 1e-3):
+        # inputs: input of reserovoir
+        # outputs: output of reservoir
+        # epsilon: given constant
+        # returns the equilibrium state when esn is fed with the first state of input
         x = B.empty((2, self.n_reservoir, 1))
         while not self.isEpsilonClose(x, epsilon):
             x[0] = x[1]
@@ -408,6 +431,13 @@ class BaseESN(object):
 
 
     def reduceTransientTime(self, inputs, outputs, initialTransientTime, epsilon = 1e-3, proximityLength = 50):
+        # inputs: input of reserovoir
+        # outputs: output of reservoir
+        # epsilon: given constant
+        # proximity length: number of steps for which all states have to be epsilon close to declare convergance
+        # initialTransientTime: transient time with calculateTransientTime() method estimated
+        # finds initial state with lower transient time and sets internal state to this state
+        # returns the new transient time by calculating the convergence time of initial states found with SWD and Equilibrium method
         length = inputs.shape[0] if inputs is not None else outputs.shape[0]
         if proximityLength is None:
             proximityLength = int(length * 0.1)
