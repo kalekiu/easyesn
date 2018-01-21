@@ -100,6 +100,8 @@ class SpatioTemporalESN(BaseESN):
             self._x[index] = B.zeros((self.n_reservoir, 1))
 
     def _embedInputData(self, inputData):
+        rank = len(inputData.shape) - 1
+
         if self._borderMode == "mirror":
             modifiedInputData = np.pad(inputData, tuple([(0,0)] + [(self._filterWidth, self._filterWidth)]*rank), mode="symmetric")
         elif self._borderMode == "padding":
@@ -263,29 +265,30 @@ class SpatioTemporalESN(BaseESN):
         #print(id(SpatioTemporalESN._fitProcess.sharedNamespace.parallelWorkerIDs))
         workerID = self.parallelWorkerIDs.get()
         #self.sharedNamespace.parallelWorkerIDs = self.sharedNamespace.parallelWorkerIDs
-
+       
         #create patchedInputData
 
         #treat the frame pixels in a special way
         inData = inputData[:, y-self._filterWidth : y+self._filterWidth+1, x-self._filterWidth : x+self._filterWidth+1][:, ::self._stride, ::self._stride].reshape(len(inputData), -1)
         #create target output series
         outData = outputData[:, y-self._filterWidth, x-self._filterWidth].reshape(-1, 1)
-
+       
         #now fit
-        X = self.propagate(inData, transientTime, x=self._x[workerID], verbose=0)
+        X = self.propagate(inData, transientTime=transientTime, x=self._x[workerID], verbose=0)
 
         #define the target values
         Y_target = self.out_inverse_activation(outData).T[:, transientTime:]
 
         X_T = X.T
+
         WOut = B.dot(B.dot(Y_target, X_T),B.inv(B.dot(X, X_T) + self._regressionParameters[0]*B.identity(1+self.n_input+self.n_reservoir)))
         
         #calculate the training prediction now
         trainingPrediction = self.out_activation(B.dot(WOut, X).T)
-            
+       
         #store the state and the output matrix of the worker
         SpatioTemporalESN._fitProcess.fitQueue.put(([x-self._filterWidth for x in indices], self._x[workerID].copy(), WOut.copy()))
-
+     
         self.parallelWorkerIDs.put(workerID)
 
     @staticmethod
