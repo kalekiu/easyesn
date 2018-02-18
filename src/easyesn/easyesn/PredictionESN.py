@@ -56,16 +56,24 @@ class PredictionESN(BaseESN):
     def fit(self, inputData, outputData, transientTime="AutoReduce", transientTimeCalculationEpsilon = 1e-3, transientTimeCalculationLength = 20, verbose=0):
         #check the input data
         if self.n_input != 0:
-            if inputData.shape[0] != outputData.shape[0]:
-                raise ValueError("Amount of input and output datasets is not equal - {0} != {1}".format(inputData.shape[0], outputData.shape[0]))
-            trainLength = inputData.shape[0]
+            if len(inputData.shape) == 3 and len(outputData.shape) > 1:
+                #multiple time series are used with a shape (timeseries, time, dimension) -> (timeseries, time, dimension)
+                if inputData.shape[0] != outputData.shape[0]:
+                    raise ValueError("Amount of input and output datasets is not equal - {0} != {1}".format(inputData.shape[0], outputData.shape[0]))
+                if inputData.shape[1] != outputData.shape[1]:
+                    raise ValueError("Amount of input and output time steps is not equal - {0} != {1}".format(inputData.shape[1], outputData.shape[1]))
+            else:
+                if inputData.shape[0] != outputData.shape[0]:
+                    raise ValueError("Amount of input and output time steps is not equal - {0} != {1}".format(inputData.shape[0], outputData.shape[0]))
         else:
             if inputData is not None:
                 raise ValueError("n_input has been set to zero. Therefore, the given inputData will not be used.")
-            trainLength = outputData.shape[0]
 
-        if len(outputData.shape) == 1:
-            outputData = outputData.reshape(-1, 1)
+        #reshape the input/output data to have the shape (timeseries, time, dimension)
+        if len(outputData.shape) <= 2:
+            outputData = outputData.reshape((1, -1, 1))
+        if len(inputData.shape) <= 2:
+            inputData = inputData.reshape((1, -1, 1))
 
         if inputData is not None:
             inputData = B.array(inputData)
@@ -76,20 +84,34 @@ class PredictionESN(BaseESN):
 
         # Automatic transient time calculations
         if transientTime == "Auto":
-            transientTime = self.calculateTransientTime(inputData, outputData, transientTimeCalculationEpsilon, transientTimeCalculationLength)
+            transientTime = self.calculateTransientTime(inputData[0], outputData[0], transientTimeCalculationEpsilon, transientTimeCalculationLength)
         if transientTime == "AutoReduce":
-            if (inputData is None and outputData.shape[1] == 1) or inputData.shape[1] == 1:
-                transientTime = self.calculateTransientTime(inputData, outputData, transientTimeCalculationEpsilon, transientTimeCalculationLength)
-                transientTime = self.reduceTransientTime(inputData, outputData, transientTime)
+            if (inputData is None and outputData.shape[2] == 1) or inputData.shape[2] == 1:
+                transientTime = self.calculateTransientTime(inputData[0], outputData[0], transientTimeCalculationEpsilon, transientTimeCalculationLength)
+                transientTime = self.reduceTransientTime(inputData[0], outputData[0], transientTime)
             else:
                 print("Transient time reduction is supported only for 1 dimensional input.")
 
+        partialLength = (inputData.shape[1]-transientTime)
+        totalLength = inputData.shape[0] * partialLength
+        self._X = B.empty((1 + self.n_input + self.n_reservoir, totalLength))
 
-        self._X = self.propagate(inputData, outputData, transientTime, verbose)
+        if (verbose > 0):
+            bar = progressbar.ProgressBar(max_value=inputData.shape[0], redirect_stdout=True, poll_interval=0.0001)
+            bar.update(0)
+
+        for i in range(inputData.shape[0]):
+            self._X[:, i*partialLength:(i+1)*partialLength] = self.propagate(inputData[i], outputData[i], transientTime, verbose-1)
+            if (verbose > 0):
+                bar.update(i)
+        if (verbose > 0):
+            bar.finish()
 
 
         #define the target values
-        Y_target = self.out_inverse_activation(outputData).T[:,transientTime:]
+        Y_target = B.empty((outputData.shape[2], totalLength))
+        for i in range(inputData.shape[0]):
+            Y_target[:, i*partialLength:(i+1)*partialLength] = self.out_inverse_activation(outputData[i]).T[:,transientTime:]
 
         if (self._solver == "pinv"):
             self._WOut = B.dot(Y_target, B.pinv(self._X))
@@ -137,7 +159,9 @@ class PredictionESN(BaseESN):
             train_prediction = self.out_activation(self._ridgeSolver.predict(self._X.T))
 
         #calculate the training error now
-        training_error = B.sqrt(B.mean((train_prediction - outputData[transientTime:])**2))
+        #flatten the outputData
+        outputData = outputData[:, transientTime:, :].reshape(totalLength, -1)
+        training_error = B.sqrt(B.mean((train_prediction - outputData)**2))
         return training_error
 
 
