@@ -9,6 +9,7 @@ import numpy.random as rnd
 import dill as pickle
 import scipy as sp
 import progressbar
+from . import helper as hp
 
 #import backend as B
 
@@ -255,20 +256,7 @@ class BaseESN(object):
 
         #check of the user is really using one of the internal methods, or wants to create W by his own
         if (weightGeneration != 'custom'):
-            #random weight matrix for the input from -0.5 to 0.5
-            self._WInput = B.rand(self.n_reservoir, 1 + self.n_input)-0.5
-
-            #scale the input_density to prevent saturated reservoir nodes
-            if (self.input_density != 1.0):
-                #make the input matrix as dense as requested
-                input_topology = (np.ones_like(self._WInput) == 1.0)
-                nb_non_zero_input = int(self.input_density * self.n_input)
-                for n in range(self.n_reservoir):
-                    input_topology[n][rnd.permutation(np.arange(1+self.n_input))[:nb_non_zero_input]] = False
-
-                self._WInput[input_topology] = 0.0
-
-            self._WInput = self._WInput * self._expandedInputScaling
+            self._createInputMatrix()
 
         #create the optional feedback matrix
         if feedback:
@@ -277,6 +265,21 @@ class BaseESN(object):
         else:
             self._WFeedback = None
 
+    def _createInputMatrix(self):
+        #random weight matrix for the input from -0.5 to 0.5
+        self._WInput = B.rand(self.n_reservoir, 1 + self.n_input)-0.5
+
+        #scale the input_density to prevent saturated reservoir nodes
+        if (self.input_density != 1.0):
+            #make the input matrix as dense as requested
+            input_topology = (np.ones_like(self._WInput) == 1.0)
+            nb_non_zero_input = int(self.input_density * self.n_input)
+            for n in range(self.n_reservoir):
+                input_topology[n][rnd.permutation(np.arange(1+self.n_input))[:nb_non_zero_input]] = False
+
+            self._WInput[input_topology] = 0.0
+
+        self._WInput = self._WInput * self._expandedInputScaling
 
     def calculateLinearNetworkTransmissions(self, u, x=None):
         if x is None:
@@ -373,7 +376,7 @@ class BaseESN(object):
         # finds initial state with lower transient time and sets internal state to this state
         # returns the new transient time by calculating the convergence time of initial states found with SWD and Equilibrium method
  
-        def getEquilibriumState(self, inputs, outputs, epsilon = 1e-3):
+        def getEquilibriumState(inputs, outputs, epsilon = 1e-3):
             # inputs: input of reserovoir
             # outputs: output of reservoir
             # epsilon: given constant
@@ -387,7 +390,7 @@ class BaseESN(object):
 
             return x[1]
 
-        def getStateAtGivenPoint(self, inputs, outputs, targetTime):
+        def getStateAtGivenPoint(inputs, outputs, targetTime):
             # inputs: input of reserovoir
             # outputs: output of reservoir
             # targetTime: time at which the state is wanted

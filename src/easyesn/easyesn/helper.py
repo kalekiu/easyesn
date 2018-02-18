@@ -65,7 +65,7 @@ def autocorrelation(self, x):
     Calculates SWD (sliding window difference) with the specified intervall using the first `interval` entries of the series as the window
     Returns a tuple consisting of the point of minimum and the whole SWD series
 """
-def SWD(self, series, intervall):
+def SWD(series, intervall):
     differences = np.zeros(series.shape[0] - 2 * intervall)
     reference_series = series[:intervall]
     for i in range(intervall, series.shape[0] - intervall):
