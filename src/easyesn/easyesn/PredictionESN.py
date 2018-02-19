@@ -71,9 +71,9 @@ class PredictionESN(BaseESN):
 
         #reshape the input/output data to have the shape (timeseries, time, dimension)
         if len(outputData.shape) <= 2:
-            outputData = outputData.reshape((1, -1, 1))
+            outputData = outputData.reshape((1, -1, self.n_output))
         if len(inputData.shape) <= 2:
-            inputData = inputData.reshape((1, -1, 1))
+            inputData = inputData.reshape((1, -1, self.n_input))
 
         if inputData is not None:
             inputData = B.array(inputData)
