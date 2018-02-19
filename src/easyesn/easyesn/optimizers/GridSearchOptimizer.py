@@ -28,7 +28,7 @@ class GridSearchOptimizer:
 
         #calculate the length of all permutations of the hyperparameters
         def enumerate_params():
-            keys, values = zip(*self.param_grid.items())
+            keys, values = zip(*self.parametersDictionary.items())
             for row in itertools.product(*values):
                 yield dict(zip(keys, row))
         length = sum(1 for x in enumerate_params())
@@ -42,7 +42,7 @@ class GridSearchOptimizer:
 
         for index, params in enumerate(enumerate_params()):
             #create and fit the ESN
-            esn = self.esnType(**params, **self.fixed_params)
+            esn = self.esnType(**params, **self.fixedParametersDictionary)
             trainingAccuricy = esn.fit(trainingInput, trainingOutput, transientTime=transientTime)
 
             current_state = esn._x
