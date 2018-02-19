@@ -93,16 +93,28 @@ class PredictionESN(BaseESN):
             else:
                 print("Transient time reduction is supported only for 1 dimensional input.")
 
-        partialLength = (inputData.shape[1]-transientTime)
-        totalLength = inputData.shape[0] * partialLength
+        if inputData is not None:
+            partialLength = (inputData.shape[1]-transientTime)
+            totalLength = inputData.shape[0] * partialLength
+            timeseriesCount = inputData.shape[0] 
+        elif outputData is not None:
+            partialLength = (outputData.shape[1]-transientTime)
+            totalLength = outputData.shape[0] * partialLength
+            timeseriesCount = outputData.shape[0]
+        else:
+            raise ValueError("Either input or output data must not to be None")
+
         self._X = B.empty((1 + self.n_input + self.n_reservoir, totalLength))
 
         if (verbose > 0):
-            bar = progressbar.ProgressBar(max_value=inputData.shape[0], redirect_stdout=True, poll_interval=0.0001)
+            bar = progressbar.ProgressBar(max_value=totalLength, redirect_stdout=True, poll_interval=0.0001)
             bar.update(0)
 
-        for i in range(inputData.shape[0]):
-            self._X[:, i*partialLength:(i+1)*partialLength] = self.propagate(inputData[i], outputData[i], transientTime, verbose-1)
+        for i in range(timeseriesCount):
+            if inputData is not None:
+                self._X[:, i*partialLength:(i+1)*partialLength] = self.propagate(inputData[i], outputData[i], transientTime, verbose-1)
+            else:
+                self._X[:, i*partialLength:(i+1)*partialLength] = self.propagate(None, outputData[i], transientTime, verbose-1)
             if (verbose > 0):
                 bar.update(i)
         if (verbose > 0):
@@ -111,7 +123,7 @@ class PredictionESN(BaseESN):
 
         #define the target values
         Y_target = B.empty((outputData.shape[2], totalLength))
-        for i in range(inputData.shape[0]):
+        for i in range(timeseriesCount):
             Y_target[:, i*partialLength:(i+1)*partialLength] = self.out_inverse_activation(outputData[i]).T[:,transientTime:]
 
         if (self._solver == "pinv"):
