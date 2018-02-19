@@ -69,16 +69,17 @@ class PredictionESN(BaseESN):
             if inputData is not None:
                 raise ValueError("n_input has been set to zero. Therefore, the given inputData will not be used.")
 
-        #reshape the input/output data to have the shape (timeseries, time, dimension)
-        if len(outputData.shape) <= 2:
-            outputData = outputData.reshape((1, -1, self.n_output))
-        if len(inputData.shape) <= 2:
-            inputData = inputData.reshape((1, -1, self.n_input))
-
         if inputData is not None:
             inputData = B.array(inputData)
         if outputData is not None:
-            outputData = B.array(outputData)
+            outputData = B.array(outputData)      
+
+        #reshape the input/output data to have the shape (timeseries, time, dimension)
+        if len(outputData.shape) <= 2:
+            outputData = outputData.reshape((1, -1, self.n_output))
+        if inputData is not None:
+            if len(inputData.shape) <= 2:
+                inputData = inputData.reshape((1, -1, self.n_input))
         
         self.resetState()
 
