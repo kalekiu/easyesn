@@ -46,7 +46,7 @@ class BaseESN(object):
                 raise ValueError("Dimension of inputScaling ({0}) does not match the input data dimension ({1})".format(len(self._inputScaling), n_input))
             self._inputScaling = inputScaling
 
-        self._expandedInputScaling = B.vstack((B.array(1.0), inputScaling.reshape(-1,1))).flatten()
+        self._expandedInputScaling = B.vstack((B.array(1.0), self._inputScaling.reshape(-1,1))).flatten()
 
         self.out_activation = out_activation
         self.out_inverse_activation = out_inverse_activation
