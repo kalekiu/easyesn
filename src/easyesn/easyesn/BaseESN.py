@@ -36,10 +36,10 @@ class BaseESN(object):
         self._activation = activation
         self._activationDerivation = activationDerivation
 
-        if inputScaling is None:
+        if self._inputScaling is None:
             self._inputScaling = 1.0
         if np.isscalar(self._inputScaling):
-            inputScaling = B.ones(n_input) * self._inputScaling
+            self._inputScaling = B.ones(n_input) * self._inputScaling
         else:
             if len(self._inputScaling) != self.n_input:
                 raise ValueError("Dimension of inputScaling ({0}) does not match the input data dimension ({1})".format(len(self._inputScaling), n_input))
