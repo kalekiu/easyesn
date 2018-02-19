@@ -35,6 +35,7 @@ class BaseESN(object):
         self.input_density = input_density
         self._activation = activation
         self._activationDerivation = activationDerivation
+        self._inputScaling = inputScaling
 
         if self._inputScaling is None:
             self._inputScaling = 1.0
