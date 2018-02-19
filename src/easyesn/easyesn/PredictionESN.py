@@ -181,10 +181,18 @@ class PredictionESN(BaseESN):
     """
         Use the ESN in the generative mode to generate a signal autonomously.
     """
-    def generate(self, n, inputData=None, continuation=True, initialData=None, update_processor=lambda x:x, verbose=0):
+    def generate(self, n, inputData=None, initialOutputData=None, continuation=True, initialData=None, update_processor=lambda x:x, verbose=0):
+        #initialOutputData is the output of the last step BEFORE the generation shall start, e.g. the last step of the training's output
+
         #check the input data
         #if (self.n_input != self.n_output):
         #    raise ValueError("n_input does not equal n_output. The generation mode uses its own output as its input. Therefore, n_input has to be equal to n_output - please adjust these numbers!")
+
+        if initialOutputData is None and initialData is None:
+            raise ValueError("Either intitialOutputData or initialData must be different from None, as the network needs an initial output value")
+
+        if initialOutputData is None and initialData is not None:
+            initialOutputData = initialData[1][-1]
 
         if inputData is not None:
             inputData = B.array(inputData)
@@ -212,7 +220,7 @@ class PredictionESN(BaseESN):
             elif len(inputData) < n:
                 raise ValueError("Length of inputData has to be >= n.")
 
-        _, Y = self.propagate(inputData, None, verbose=verbose, steps=n)
+        _, Y = self.propagate(inputData, None, verbose=verbose, steps=n, previousOutputData=initialOutputData)
         Y = update_processor(Y)
         
         #return the result

@@ -82,7 +82,7 @@ class BaseESN(object):
     def resetState(self):
         self._x = B.zeros_like(self._x)
 
-    def propagate(self, inputData, outputData=None, transientTime=0, verbose=0, x=None, steps="auto"):
+    def propagate(self, inputData, outputData=None, transientTime=0, verbose=0, x=None, steps="auto", previousOutputData=None):
         if x is None:
             x = self._x
 
@@ -117,7 +117,8 @@ class BaseESN(object):
             if outputData is None:
                 Y = B.empty((inputLength-transientTime, self.n_output))
 
-            previousOutputData = B.zeros((1, self.n_output))
+            if previousOutputData is None:
+                previousOutputData = B.zeros((1, self.n_output))
 
             if inputData is None:
                 for t in range(inputLength):
