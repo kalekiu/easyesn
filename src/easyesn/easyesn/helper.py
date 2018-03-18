@@ -3,8 +3,6 @@
 """
 
 import numpy as np
-import matplotlib.pyplot as plt
-import matplotlib.animation as animation
 
 """
     Calculates the mutual information between the two signals x and y.
