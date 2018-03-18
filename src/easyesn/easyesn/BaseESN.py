@@ -21,7 +21,7 @@ class BaseESN(object):
                  leakingRate=1.0, feedbackScaling = 1.0, reservoirDensity=0.2, randomSeed=None,
                  out_activation=lambda x: x, out_inverse_activation=lambda x: x,
                  weightGeneration='naive', bias=1.0, outputBias=1.0, outputInputScaling=1.0,
-                 feedback=False, input_density=1.0, activation = B.tanh, activationDerivation=lambda x: 1.0/B.cosh(x)**2):
+                 feedback=False, inputDensity=1.0, activation = B.tanh, activationDerivation=lambda x: 1.0/B.cosh(x)**2):
 
         self.n_input = n_input
         self.n_reservoir = n_reservoir
@@ -32,7 +32,7 @@ class BaseESN(object):
         self._reservoirDensity = reservoirDensity
         self._leakingRate = leakingRate
         self._feedbackScaling = feedbackScaling
-        self.input_density = input_density
+        self.inputDensity = inputDensity
         self._activation = activation
         self._activationDerivation = activationDerivation
         self._inputScaling = inputScaling
@@ -271,11 +271,11 @@ class BaseESN(object):
         #random weight matrix for the input from -0.5 to 0.5
         self._WInput = B.rand(self.n_reservoir, 1 + self.n_input)-0.5
 
-        #scale the input_density to prevent saturated reservoir nodes
-        if (self.input_density != 1.0):
+        #scale the inputDensity to prevent saturated reservoir nodes
+        if (self.inputDensity != 1.0):
             #make the input matrix as dense as requested
             input_topology = (np.ones_like(self._WInput) == 1.0)
-            nb_non_zero_input = int(self.input_density * self.n_input)
+            nb_non_zero_input = int(self.inputDensity * self.n_input)
             for n in range(self.n_reservoir):
                 input_topology[n][rnd.permutation(np.arange(1+self.n_input))[:nb_non_zero_input]] = False
 
