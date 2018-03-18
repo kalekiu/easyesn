@@ -20,13 +20,13 @@ class ClassificationESN(BaseESN):
                  spectralRadius=1.0, noiseLevel=0.0, inputScaling=None,
                  leakingRate=1.0, reservoirDensity=0.2, randomSeed=None,
                  out_activation=lambda x: 0.1+0.98*x/(1+B.exp(-x)), out_inverse_activation=lambda x: B.log((x*0.98+0.01)/(0.99-x*0.98)),
-                 weight_generation='naive', bias=1.0, outputBias=1.0,
+                 weightGeneration='naive', bias=1.0, outputBias=1.0,
                  outputInputScaling=1.0, inputDensity=1.0, solver='pinv', regressionParameters={}, activation = B.tanh, activationDerivation=lambda x: 1.0/B.cosh(x)**2):
 
         super(ClassificationESN, self).__init__(n_input=n_input, n_reservoir=n_reservoir, n_output=n_classes, spectralRadius=spectralRadius,
                                   noiseLevel=noiseLevel, inputScaling=inputScaling, leakingRate=leakingRate, reservoirDensity=reservoirDensity,
                                   randomSeed=randomSeed, out_activation=out_activation, out_inverse_activation=out_inverse_activation,
-                                  weight_generation=weight_generation, bias=bias, outputBias=outputBias, outputInputScaling=outputInputScaling,
+                                  weightGeneration=weightGeneration, bias=bias, outputBias=outputBias, outputInputScaling=outputInputScaling,
                                   inputDensity=inputDensity, activation=activation, activationDerivation=activationDerivation)
 
 

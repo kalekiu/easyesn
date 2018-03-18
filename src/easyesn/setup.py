@@ -1,7 +1,7 @@
 from setuptools import setup, find_packages
 
 setup(name='easyesn',
-      version='0.1.2',
+      version='0.1.3.6',
       description='',
       url='https://github.com/kalekiu/easyesn',
       author='Roland Zimmermann, Luca Thiede',
@@ -12,7 +12,8 @@ setup(name='easyesn',
             'numpy',
             'progressbar2',
             'dill',
-            'multiprocess'
+            'multiprocess',
+            'sklearn'
       ],
       classifiers=[
             'Intended Audience :: Science/Research',

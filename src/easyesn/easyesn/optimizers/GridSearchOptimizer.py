@@ -138,14 +138,14 @@ class GridSearchOptimizer:
                 maxValue = np.min(grid) + np.min(grid) * gridHeight
                 plotGrid[np.where(plotGrid > maxValue)] = maxValue
                 plotGrid[np.where(np.isnan(plotGrid))] = maxValue
-            fig, ax = plt.subplots()
+            fig = plt.figure()
             mat = plt.imshow(plotGrid, vmin=np.min(plotGrid), vmax=np.max(plotGrid),
                              extent=[fromParam1, tillParam1, tillParam2, fromParam2])
             clb = fig.colorbar(mat)
             plt.title(title)
             plt.xlabel(param1)
             plt.ylabel(param2)
-            plt.show()
+            return fig
 
         trainErrorGrid = np.zeros((N, N))
         validationErrorGrid = np.zeros((N, N))
@@ -167,7 +167,7 @@ class GridSearchOptimizer:
         if verbose > 0:
             bar.finish()
 
-        plotGrid(trainErrorGrid, "Train error", fromParam1, tillParam1, fromParam2, tillParam2, param1, param2, gridHeight)
-        plotGrid(validationErrorGrid, "Validation error", fromParam1, tillParam1, fromParam2, tillParam2, param1, param2, gridHeight)
+        trainFigure = plotGrid(trainErrorGrid, "Train error", fromParam1, tillParam1, fromParam2, tillParam2, param1, param2, gridHeight)
+        validationFigure = plotGrid(validationErrorGrid, "Validation error", fromParam1, tillParam1, fromParam2, tillParam2, param1, param2, gridHeight)
 
-        return trainErrorGrid, validationErrorGrid
+        return trainFigure, validationFigure, trainErrorGrid, validationErrorGrid

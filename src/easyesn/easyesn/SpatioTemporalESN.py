@@ -27,7 +27,7 @@ class SpatioTemporalESN(BaseESN):
                  leakingRate=1.0, reservoirDensity=0.2, randomSeed=None, averageOutputWeights=True,
                  out_activation=lambda x: x, out_inverse_activation=lambda x: x,
                  weightGeneration='naive', bias=1.0, outputBias=1.0,
-                 outputInputScaling=1.0, input_density=1.0, solver='pinv', regressionParameters={}, activation = B.tanh, activationDerivation=lambda x: 1.0/B.cosh(x)**2):
+                 outputInputScaling=1.0, inputDensity=1.0, solver='pinv', regressionParameters={}, activation = B.tanh, activationDerivation=lambda x: 1.0/B.cosh(x)**2):
        
         self._averageOutputWeights = averageOutputWeights
         if averageOutputWeights and solver != "lsqr":
@@ -79,7 +79,7 @@ class SpatioTemporalESN(BaseESN):
                                   noiseLevel=noiseLevel, inputScaling=inputScaling, leakingRate=leakingRate, reservoirDensity=reservoirDensity,
                                   randomSeed=randomSeed, out_activation=out_activation, out_inverse_activation=out_inverse_activation,
                                   weightGeneration=weightGeneration, bias=bias, outputBias=outputBias, outputInputScaling=outputInputScaling,
-                                  input_density=input_density, activation=activation, activationDerivation=activationDerivation)
+                                  inputDensity=inputDensity, activation=activation, activationDerivation=activationDerivation)
 
         """
             allowed values for the solver:
