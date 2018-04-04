@@ -7,7 +7,9 @@ import itertools
 import operator
 import progressbar
 from .. import helper as hlp
-import matplotlib.pyplot as plt
+
+from multiprocessing import Process, Queue, Manager, Pool #we require Pathos version >=0.2.6. Otherwise we will get an "EOFError: Ran out of input" exception
+import multiprocessing
 
 class GridSearchOptimizer:
     """
@@ -19,31 +21,53 @@ class GridSearchOptimizer:
         self.parametersDictionary = parametersDictionary
         self.fixedParametersDictionary = fixedParametersDictionary
 
+    """
+        Processes the async. results of the _get_score methods and indicates the progress to the user.
+    """
+    @staticmethod
+    def _processThreadResults(q, numberOfResults, verbose):
+        #no output wanted, so return now
+        if verbose == 0:
+            return
 
-    def fit(self, trainingInput, trainingOutput, validationInput, validationOutput, transientTime, verbose=1):
-        """
-        Fits an ESN for each of the wanted hyperparameters and predicts the output.
-        The best results parameters will be stores in _best_params.
-        """
+        #initialize the progressbar to indicate the progress
+        metrics_widget = progressbar.widgets.FormatCustomText(' Loss:\t%(loss).2E', {'loss': np.nan})
+        bar = progressbar.ProgressBar(max_value=numberOfResults, redirect_stdout=True, widgets=[metrics_widget])
+        bar.widgets = bar.default_widgets() + [metrics_widget]
+        bar.update(0)
 
-        #calculate the length of all permutations of the hyperparameters
-        def enumerate_params():
-            keys, values = zip(*self.parametersDictionary.items())
-            for row in itertools.product(*values):
-                yield dict(zip(keys, row))
-        length = sum(1 for x in enumerate_params())
 
-        if verbose > 0:
-            #initialize the progressbar to indicate the progress
-            bar = progressbar.ProgressBar(max_value=length, redirect_stdout=True)
+        finishedResults = 0
+        validationMSE = np.inf
 
-        #store the results here
-        results = []
+        while True:
+            #leave this method only if all results have been fetched
+            if finishedResults == numberOfResults:
+                break
 
-        for index, params in enumerate(enumerate_params()):
-            #create and fit the ESN
-            esn = self.esnType(**params, **self.fixedParametersDictionary)
-            trainingAccuricy = esn.fit(trainingInput, trainingOutput, transientTime=transientTime)
+            #fetch new data
+            newValidationMSE, _, _ = q.get()
+            validationMSE = min(validationMSE, newValidationMSE)
+            finishedResults += 1
+
+            metrics_widget.update_mapping(loss=validationMSE)
+
+            #show progress
+            bar.update(finishedResults)
+
+        bar.finish()
+
+    """
+        Fits an ESN with one specified set of hyperparameters, evaluates and returns its performance.
+    """
+    @staticmethod
+    def _getScore(data):
+        params, fixed_params, trainingInput, trainingOutput, validationInput, validationOutput, transientTime, esnType = data
+
+        try:
+            esn = esnType(**params, **fixed_params)
+
+            trainingAccuracy = esn.fit(trainingInput, trainingOutput, transientTime=transientTime)
 
             current_state = esn._x
 
@@ -63,7 +87,105 @@ class GridSearchOptimizer:
 
             validationMSE = np.mean(validationMSEs)
 
-            results.append((validationMSE, trainingAccuricy, params))
+            dat = (validationMSE, trainingAccuracy, params)
+        except:
+            import sys, traceback
+            print("Unexpected error:", sys.exc_info()[0])
+            print(traceback.format_exc())
+
+            dat = (np.nan, np.nan, params)
+
+
+        GridSearchOptimizer._getScore.q.put(dat)
+
+        return dat
+
+    """
+        Initializes the queue object of the _get_score method.
+    """
+    @staticmethod
+    def _getScoreInit(q):
+        GridSearchOptimizer._getScore.q = q
+
+    """
+        Fits an ESN for each of the wanted hyperparameters and predicts the output.
+        The best results parameters will be stores in _best_params.
+    """
+    def fit_parallel(self, trainingInput, trainingOutput, validationInput, validationOutput, transientTime, verbose=1, n_jobs=1):
+        #calculate the length of all permutations of the hyperparameters
+        #create the jobs
+        def enumerate_params():
+            keys, values = zip(*self.parametersDictionary.items())
+            for row in itertools.product(*values):
+                yield dict(zip(keys, row))
+        jobs = []
+        for x in enumerate_params():
+            jobs.append((x, self.fixedParametersDictionary, trainingInput, trainingOutput, validationInput, validationOutput, transientTime, self.esnType))
+
+        queue = Queue()
+        pool = Pool(processes=n_jobs, initializer=GridSearchOptimizer._getScoreInit, initargs=[queue,] )
+
+        processProcessResultsThread = Process(target=GridSearchOptimizer._processThreadResults, args=(queue, len(jobs), verbose))
+
+        processProcessResultsThread.start()
+        results = pool.map(GridSearchOptimizer._getScore, jobs)
+        pool.close()
+
+        #determine the best parameters by minimizing the error
+        res = min(results, key=operator.itemgetter(0))
+
+        self._best_params = res[2]
+        self._best_mse = res[0]
+
+        return results
+
+
+    def fit(self, trainingInput, trainingOutput, validationInput, validationOutput, transientTime, verbose=1):
+        """
+        Fits an ESN for each of the wanted hyperparameters and predicts the output.
+        The best results parameters will be stores in _best_params.
+        """
+
+        #calculate the length of all permutations of the hyperparameters
+        def enumerate_params():
+            keys, values = zip(*self.parametersDictionary.items())
+            for row in itertools.product(*values):
+                yield dict(zip(keys, row))
+        length = sum(1 for x in enumerate_params())
+
+        if verbose > 0:
+            #initialize the progressbar to indicate the progress
+            metrics_widget = progressbar.widgets.FormatCustomText(' Loss:\t%(loss).2E', {'loss': np.nan})
+            bar = progressbar.ProgressBar(max_value=length, redirect_stdout=True, widgets=[metrics_widget])
+            bar.widgets = bar.default_widgets() + [metrics_widget]
+
+        #store the results here
+        results = []
+
+        for index, params in enumerate(enumerate_params()):
+            #create and fit the ESN
+            esn = self.esnType(**params, **self.fixedParametersDictionary)
+            trainingAccuracy = esn.fit(trainingInput, trainingOutput, transientTime=transientTime)
+
+            current_state = esn._x
+
+            #evaluate the ESN
+            validationMSEs = []
+
+            #check whether only one validation sequence is ought to be checked or if the esn has to be validated on multiple sequences
+            if len(validationOutput.shape) == len(trainingInput.shape) + 1:
+                for n in range(validationOutput.shape[0]):
+                    esn._x = current_state
+                    outputPrediction = esn.predict(validationInput[n])
+                    validationMSEs.append(np.mean((validationOutput[n] - outputPrediction)**2))
+            else:
+                 esn._x = current_state
+                 outputPrediction = esn.predict(validationInput)
+                 validationMSEs.append(np.mean((validationOutput - outputPrediction)**2))
+
+            validationMSE = np.mean(validationMSEs)
+
+            results.append((validationMSE, trainingAccuracy, params))
             
             if verbose > 0:
                 bar.update(index)
@@ -72,6 +194,9 @@ class GridSearchOptimizer:
             if verbose > 1:
                 res = min(results, key=operator.itemgetter(0))
                 print("Current best parameters: \t: " + str(res))
+
+            if verbose > 0:
+                metrics_widget.update_mapping(loss=min(results, key=operator.itemgetter(0))[0])
 
         if verbose > 0:
             bar.finish()
@@ -138,6 +263,9 @@ class GridSearchOptimizer:
                 maxValue = np.min(grid) + np.min(grid) * gridHeight
                 plotGrid[np.where(plotGrid > maxValue)] = maxValue
                 plotGrid[np.where(np.isnan(plotGrid))] = maxValue
+
+            import matplotlib.pyplot as plt
+
             fig = plt.figure()
             mat = plt.imshow(plotGrid, vmin=np.min(plotGrid), vmax=np.max(plotGrid),
                              extent=[fromParam1, tillParam1, tillParam2, fromParam2])
