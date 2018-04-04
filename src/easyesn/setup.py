@@ -1,7 +1,7 @@
 from setuptools import setup, find_packages
 
 setup(name='easyesn',
-      version='0.1.3.6',
+      version='0.1.4.2',
       description='',
       url='https://github.com/kalekiu/easyesn',
       author='Roland Zimmermann, Luca Thiede',
@@ -23,3 +23,5 @@ setup(name='easyesn',
             'Programming Language :: Python :: 3'
       ],
       zip_safe=False)
+
+# release new package with: python setup.py sdist upload -r pypi
