@@ -144,7 +144,7 @@ class SpatioTemporalESN(BaseESN):
 
         modifiedInputData = self._embedInputData(inputData)
         
-        if SpationTemporalESN._isWindows():
+        if SpatioTemporalESN._isWindows():
             self.sharedNamespace.inputData = modifiedInputData
             self.sharedNamespace.outputData = outputData
         else:
@@ -296,7 +296,7 @@ class SpatioTemporalESN(BaseESN):
 
     def _fitProcess(self, indices):
         try:
-            if SpationTemporalESN._isWindows():
+            if SpatioTemporalESN._isWindows():
                 inputData = self.sharedNamespace.inputData
                 outputData = self.sharedNamespace.outputData
             else:
