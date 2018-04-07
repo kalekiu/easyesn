@@ -1,7 +1,7 @@
 from setuptools import setup, find_packages
 
 setup(name='easyesn',
-      version='0.1.4.2',
+      version='0.1.4.3',
       description='',
       url='https://github.com/kalekiu/easyesn',
       author='Roland Zimmermann, Luca Thiede',
