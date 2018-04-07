@@ -12,6 +12,7 @@ from sklearn.linear_model import Ridge
 from sklearn.svm import SVR
 from sklearn.linear_model import LogisticRegression
 import progressbar
+import sys
 
 #import dill
 
@@ -92,7 +93,11 @@ class SpatioTemporalESN(BaseESN):
                 sklearn_lsqr
                 sklearn_sag
         """  
-    
+
+    @staticmethod
+    def _isWindows():
+        return hasattr(sys, 'getwindowsversion')
+
     def resetState(self, index=None):
         if index is None:
              self._x = B.zeros((self._nWorkers, self.n_reservoir, 1))
@@ -126,6 +131,9 @@ class SpatioTemporalESN(BaseESN):
         if rank == self.n_inputDimensions:
             inputData = inputData.reshape(1, *inputData.shape)
             outputData = outputData.reshape(1, *outputData.shape)
+        else:
+            # modify rank again
+            rank -= 1
 
         partialLength = (inputData.shape[1]-transientTime)
         totalLength = inputData.shape[0] * partialLength
@@ -136,8 +144,13 @@ class SpatioTemporalESN(BaseESN):
 
         modifiedInputData = self._embedInputData(inputData)
         
-        self.sharedNamespace.inputData = modifiedInputData
-        self.sharedNamespace.outputData = outputData
+        if SpationTemporalESN._isWindows():
+            self.sharedNamespace.inputData = modifiedInputData
+            self.sharedNamespace.outputData = outputData
+        else:
+            self._inputData = modifiedInputData
+            self._outputData = outputData
+        
         self.sharedNamespace.transientTime = transientTime
 
         self.sharedNamespace.partialLength = partialLength
@@ -147,9 +160,7 @@ class SpatioTemporalESN(BaseESN):
         self.sharedNamespace.WOut = self._WOut
         self.sharedNamespace.WOuts = self._WOuts
         self.sharedNamespace.xs = self._xs
-
-        
-               
+     
         jobs = np.stack(np.meshgrid(*[np.arange(x)+self._filterWidth for x in inputData.shape[2:]]), axis=rank).reshape(-1, rank).tolist()
         nJobs = len(jobs)
 
@@ -223,8 +234,11 @@ class SpatioTemporalESN(BaseESN):
         modifiedInputData = modifiedInputData[0]
         inputData = inputData[0]
 
-        self.sharedNamespace.inputData = modifiedInputData
-        self.sharedNamespace.transientTime = transientTime
+        if SpatioTemporalESN._isWindows():
+            self.sharedNamespace.inputData = modifiedInputData
+        else:
+            self._inputData = modifiedInputData
+        self.transientTime = transientTime
         predictionOutput = B.zeros(np.insert(self.inputShape, 0, inputData.shape[0]-transientTime))
        
         jobs = np.stack(np.meshgrid(*[np.arange(x)+self._filterWidth for x in inputData.shape[1:]]), axis=rank).reshape(-1, rank).tolist()
@@ -282,8 +296,12 @@ class SpatioTemporalESN(BaseESN):
 
     def _fitProcess(self, indices):
         try:
-            inputData = self.sharedNamespace.inputData
-            outputData = self.sharedNamespace.outputData
+            if SpationTemporalESN._isWindows():
+                inputData = self.sharedNamespace.inputData
+                outputData = self.sharedNamespace.outputData
+            else:
+                inputData = self._inputData
+                outputData = self._outputData
             transientTime = self.sharedNamespace.transientTime
 
             partialLength = self.sharedNamespace.partialLength
@@ -344,7 +362,10 @@ class SpatioTemporalESN(BaseESN):
 
     def _predictProcess(self, indices):
         try:
-            inputData = self.sharedNamespace.inputData
+            if SpatioTemporalESN._isWindows():
+                inputData = self.sharedNamespace.inputData
+            else:
+                inputData = self._inputData
             transientTime = self.sharedNamespace.transientTime
 
             y, x = indices
