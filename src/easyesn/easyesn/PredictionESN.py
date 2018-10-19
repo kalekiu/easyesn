@@ -188,6 +188,15 @@ class PredictionESN(BaseESN):
         #if (self.n_input != self.n_output):
         #    raise ValueError("n_input does not equal n_output. The generation mode uses its own output as its input. Therefore, n_input has to be equal to n_output - please adjust these numbers!")
 
+        if inputData is not None:
+            inputData = B.array(inputData)
+
+        if initialOutputData is not None:
+            initialOutputData = B.array(initialOutputData)
+
+        if initialData is not None:
+            initialData = B.array(initialData)
+
         if initialOutputData is None and initialData is None:
             raise ValueError("Either intitialOutputData or initialData must be different from None, as the network needs an initial output value")
 
