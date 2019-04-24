@@ -81,10 +81,10 @@ class GradientOptimizer(object):
     ####################################################################################################################################################
 
 
-    def fit(self, trainingInput, trainingOutput, validationInput, validationOutput, verbose=1):
-        self.optimizeParameterForTrainError(trainingInput, trainingOutput, validationInput, validationOutput, verbose)
-        self.optimizePenaltyForEvaluationError(trainingInput, trainingOutput, validationInput, validationOutput, verbose)
-        self.optimizeParameterForValidationError(trainingInput, trainingOutput, validationInput, validationOutput, verbose)
+    def fit(self, trainingInput, trainingOutput, validationInput, validationOutput, epochs=1, transientTime=None, verbose=1):
+        self.optimizeParameterForTrainError(trainingInput, trainingOutput, validationInput, validationOutput, epochs, transientTime, verbose)
+        self.optimizePenaltyForEvaluationError(trainingInput, trainingOutput, validationInput, validationOutput, epochs, transientTime, verbose)
+        self.optimizeParameterForValidationError(trainingInput, trainingOutput, validationInput, validationOutput, epochs, transientTime, verbose)
 
     def optimizeParameterForTrainError(self, trainingInputData, trainingOutputData, validationInputData, validationOutputData,
                                        epochs=1, transientTime=None, verbose=1):
