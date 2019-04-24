@@ -299,7 +299,7 @@ class GradientOptimizer(object):
         spectralRadiuses = list()
         fitLosses = list()
         validationLosses = list()
-        learingRates = list()
+        learningRates = list()
 
         # initializations for arrays which collect all the gradients of the error of the single time steps, which get add at the end
         srGradients = B.zeros(optimizationLength)
