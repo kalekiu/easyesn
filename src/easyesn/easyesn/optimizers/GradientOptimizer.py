@@ -51,28 +51,14 @@ class GradientOptimizer(object):
     # del W_out / del beta
     def derivationForPenalty(self, Y, X, penalty):
         X_T = X.T
-        term2 = B.inv( B.dot( X, X_T ) + penalty * B.identity(1 + self._reservoir.n_input + self._reservoir.n_self._reservoir) )
-        return - B.dot( B.dot( Y, X_T ), B.dot( term2, term2 ) )
+        term2 = B.inv( B.dot( X, X_T ) + penalty * B.identity(1 + self._reservoir.n_input + self._reservoir.n_reservoir) )
+        
+        return -B.dot( B.dot( Y, X_T ), B.dot( term2, term2 ) )
 
     # del W_out / del (alpha, rho or s_in)
     def derivationWoutForP(self, Y, X, XPrime):
         X_T = X.T
         XPrime_T = XPrime.T
-
-        # A = dot(X,X_T) + penalty*eye(1 + self.target_dim + self.n_reservoir)
-        # APrime = dot( XPrime, X_T) + dot( X, XPrime_T )
-        # APrime_T = APrime.T
-        # InvA = B.inv(A)
-        # InvA_T = InvA.T
-        #
-        # term1 = dot(XPrime_T, InvA)
-        #
-        # term21 = -dot( InvA, dot( APrime, InvA ) )
-        # term22 = dot( dot( dot( InvA, InvA_T), APrime_T), eye(1 + self.target_dim + self.n_reservoir) - dot( A, InvA ) )
-        # term23 = dot( dot( eye(1 + self.target_dim + self.n_reservoir) - dot( InvA, A ), APrime_T), dot( InvA_T, InvA) )
-        # term2 = dot( X_T, term21 + term22 + term23 )
-        #
-        # return dot( Y, term1 + term2)
 
         term1 = B.inv(B.dot(X,X_T) + self._reservoir._regressionParameters[0]*B.identity(1 + self._reservoir.n_input + self._reservoir.n_reservoir))
         term2 = B.dot( XPrime, X_T) + B.dot( X, XPrime_T )
@@ -172,10 +158,6 @@ class GradientOptimizer(object):
 
 
                 # calculate the del /x del (rho, alpha, s_in)
-                #derivationSpectralRadius = self.derivationForSpectralRadius(W_uniform, derivationSpectralRadius, u, oldx)
-                #derivationLeakingRate = self.derivationForLeakingRate(derivationLeakingRate, u, oldx)
-                #derivationInputScaling = self.derivationForInputScaling(W_in_uniform, derivationInputScaling, u, oldx)
-
                 derivationLeakingRate, derivationSpectralRadius, derivationInputScaling = self._derivationLrSrIsFs( (derivationLeakingRate, derivationSpectralRadius, derivationInputScaling, None), W_uniform, W_in_uniform, u, oldx)
                 if t >= transientTime:
 
@@ -265,19 +247,20 @@ class GradientOptimizer(object):
         return (validationLosses, fitLosses, inputScalings, leakingRates, spectralRadiuses, learningRates)
 
     def optimizeParameterForValidationError(self, trainingInputData, trainingOutputData, validationInputData, validationOutputData,
-                                            optimizationLength, epochs=1, transientTime=None, verbose=1):
+                                            epochs=1, transientTime=None, verbose=1):
 
         self._validateReservoir()
 
         learningRate = self._learningRates[1]
-
-        if not np.isscalar(self._reservoir._inputScaling):
+        if self._reservoir._inputScaling.shape[0] != 1:
             raise ValueError("Only penalty optimization is supported for a multiple input scalings at the moment. We are working on it.")
 
         # calculate stuff
         trainLength = trainingInputData.shape[0]
         if transientTime is None:
             transientTime = self._reservoir.estimateTransientTime(trainingInputData, trainingOutputData)
+
+        validationLength = trainingInputData.shape[0]
 
         # initializations of arrays:
         if (len(trainingOutputData.shape) == 1):
@@ -302,9 +285,9 @@ class GradientOptimizer(object):
         learningRates = list()
 
         # initializations for arrays which collect all the gradients of the error of the single time steps, which get add at the end
-        srGradients = B.zeros(optimizationLength)
-        lrGradients = B.zeros(optimizationLength)
-        isGradients = B.zeros(optimizationLength)
+        srGradients = B.zeros(validationLength)
+        lrGradients = B.zeros(validationLength)
+        isGradients = B.zeros(validationLength)
 
         # collecting the single derivatives  - > this is the derivation of design matrix when filled
         srGradientsMatrix = B.zeros((self._reservoir.n_reservoir + self._reservoir.n_input + 1, trainLength - transientTime))
@@ -342,13 +325,9 @@ class GradientOptimizer(object):
             for t, u in enumerate(trainingInputData):
                 u = u.reshape(-1, 1)
                 oldx = x
-                x = self._reservoir._X[2:,t]
-
+                x = self._reservoir._X[self._reservoir.n_input + 1:, t - transientTime]
 
                 # calculate the del /x del (rho, alpha, s_in)
-                #derivationSpectralRadius = self.derivationForSpectralRadius(W_uniform, derivationSpectralRadius, u, oldx)
-                #derivationLeakingRate = self.derivationForLeakingRate(derivationLeakingRate, u, oldx)
-                #derivationInputScaling = self.derivationForInputScaling(W_in_uniform, derivationInputScaling, u, oldx)
 
                 derivationLeakingRate, derivationSpectralRadius, derivationInputScaling = self._derivationLrSrIsFs( (derivationLeakingRate, derivationSpectralRadius, derivationInputScaling, None), W_uniform, W_in_uniform, u, oldx)
                 if t >= transientTime:
@@ -372,11 +351,6 @@ class GradientOptimizer(object):
 
                 # calculate error at given time step
                 error = (validationOutputData[t] - B.dot( self._reservoir._WOut, B.vstack((1, u, x)) ) ).T
-
-# calculate the del /x del (rho, alpha, s_in)
-                #derivationSpectralRadius = self.derivationForSpectralRadius(W_uniform, derivationSpectralRadius, u, oldx)
-                #derivationLeakingRate = self.derivationForLeakingRate(derivationLeakingRate, u, oldx)
-                #derivationInputScaling = self.derivationForInputScaling(W_in_uniform, derivationInputScaling, u, oldx)
 
                 derivationLeakingRate, derivationSpectralRadius, derivationInputScaling = self._derivationLrSrIsFs((derivationLeakingRate, derivationSpectralRadius, derivationInputScaling, None), W_uniform, W_in_uniform, u, oldx)
 
@@ -446,11 +420,13 @@ class GradientOptimizer(object):
         return (validationLosses, fitLosses, inputScalings, leakingRates, spectralRadiuses, learningRates)
 
     def optimizePenaltyForEvaluationError(self, trainingInputData, trainingOutputData, validationInputData, validationOutputData,
-                                          optimizationLength, epochs=1, penalty=0.1, transientTime=0, verbose=1):
+                                          epochs=1, penalty=0.1, transientTime=0, verbose=1):
 
         self._validateReservoir()
 
         learningRate = self._learningRates[2]
+
+        validationLength = validationOutputData.shape[0]
 
         # initializations of arrays:
         if (len(trainingOutputData.shape) == 1):
@@ -471,19 +447,20 @@ class GradientOptimizer(object):
         penalties = list()
         learningRates = list()
 
-        penaltyDerivatives = B.zeros(optimizationLength)
+        penaltyDerivatives = B.zeros(validationLength)
         oldPenalty = penalty
 
         self._reservoir.fit(trainingInputData, trainingOutputData, transientTime=transientTime)
         oldLoss = hlp.loss(self._reservoir.predict(validationInputData), validationOutputData)
 
-        evaluationEchoFunction = B.zeros((1 + self._reservoir.n_reservoir + self._reservoir.n_input, optimizationLength))
+        evaluationEchoFunction = B.zeros((1 + self._reservoir.n_reservoir + self._reservoir.n_input, validationLength))
         x = self._reservoir._x
 
         for t, u in enumerate(validationInputData):
             u = u.reshape(-1, 1)
             self._reservoir.update(u)
             x = self._reservoir._x
+
             evaluationEchoFunction[:, t] = B.vstack((1, u, x)).squeeze()
 
         if (verbose > 0):
@@ -499,7 +476,8 @@ class GradientOptimizer(object):
             for t in range(len(validationInputData)):
                 predictionPoint = B.dot(self._reservoir._WOut, evaluationEchoFunction[:, t].reshape(-1, 1))
                 error = (trainingOutputData[t] - predictionPoint).T
-                penaltyDerivatives[t] = - B.dot(B.dot(error, penaltyDerivative), predictionPoint)
+
+                penaltyDerivatives[t] = - B.dot(B.dot(error, penaltyDerivative), evaluationEchoFunction[:, t])
 
             penaltyGradient = sum(penaltyDerivatives)
 
@@ -507,8 +485,12 @@ class GradientOptimizer(object):
 
             penalty = penalty - learningRate * penaltyGradient
 
-            self._reservoir.setPenalty(penalty)
-            self._reservoir._calculateOutputMatrix()
+            self._reservoir.setRegressionParameters(penalty)
+            
+            self._reservoir._W_out = B.dot(B.dot(Ytarget, self._reservoir._X.T), B.inv(B.dot(self._reservoir._X, self._reservoir._X.T) + \
+                self._reservoir._regressionParameters[0]*B.identity(1+self._reservoir.n_input+self._reservoir.n_reservoir)))
+
+
             fitLoss = hlp.loss( self._reservoir.predict( trainingInputData), trainingOutputData )
             validationLoss = hlp.loss( self._reservoir.predict(validationInputData), validationOutputData )
 

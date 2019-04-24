@@ -49,6 +49,12 @@ class PredictionESN(BaseESN):
                 sklearn_sag
         """
 
+    def setRegressionParameters(self, newRegressionParameters):
+        if not isinstance(newRegressionParameters, (list, tuple)) and np.isscalar(newRegressionParameters):
+            newRegressionParameters = [newRegressionParameters]
+
+        self._regressionParameters = newRegressionParameters
+
 
     """
         Fits the ESN so that by applying the inputData the outputData will be produced.

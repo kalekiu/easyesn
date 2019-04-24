@@ -78,7 +78,6 @@ class BaseESN(object):
         self._WFeedback = self._WFeedback * ( newFeedbackScaling / self._feedbackScaling)
         self._feedbackScaling = newFeedbackScaling
 
-
     def resetState(self):
         self._x = B.zeros_like(self._x)
 
