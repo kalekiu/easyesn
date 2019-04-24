@@ -92,8 +92,7 @@ class GradientOptimizer(object):
         self._validateReservoir()
 
         learningRate = self._learningRates[0]
-
-        if not np.isscalar(self._reservoir._inputScaling):
+        if self._reservoir._inputScaling.shape[0] != 1:
             raise ValueError("Only penalty optimization is supported for a multiple input scalings at the moment. We are working on it.")
 
         # calculate stuff
