@@ -478,7 +478,7 @@ class GradientOptimizer(object):
         oldLoss = hlp.loss(self._reservoir.predict(validationInputData), validationOutputData)
 
         evaluationEchoFunction = B.zeros((1 + self._reservoir.n_reservoir + self._reservoir.n_input, optimizationLength))
-        x = self._reservoir.x
+        x = self._reservoir._x
 
         for t, u in enumerate(validationInputData):
             u = u.reshape(-1, 1)
