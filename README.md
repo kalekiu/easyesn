@@ -83,6 +83,9 @@ At the moment, these are supported backend names:
 |   `cupy`    | `cupy` (GPU)|
 |   `cp`    | `cupy` (GPU)|
 
+# Notes
+As of right now, the `GradientOptimizer` does not fully work - we are looking into this and try to fix the issue.
+
 # Documentation
 
 # Develop
