@@ -87,5 +87,11 @@ def argmax(x, axis):
 def zeros_like(x):
     return cp.zeros_like(x)
 
+def var(x):
+	return cp.var(x)
+
+def allclose(x, y, atol=1e-05, rtol=0, equal_nan=False):
+	return cp.allclose(x, y, atol, rtol, equal_nan)
+
 def ptp(x, axis=None):
     return cp.subtract(cp.amax(x, axis), cp.amin(x, axis))
