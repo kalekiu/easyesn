@@ -88,13 +88,13 @@ def all(x):
 	return np.all(x)
 
 def correlate(a, v, mode='valid'):
-	return np.correlate(a, v, mode='valid')
+	return np.correlate(a, v, mode=mode)
 
 def var(x):
 	return np.var(x)
 
 def allclose(x, y, atol=1e-05, rtol=0, equal_nan=False):
-    return np.allclose(x, y, atol, atol, equal_nan)
+    return np.allclose(x, y, atol, rtol, equal_nan)
 
 def ptp(x, axis=None):
     return np.ptp(x, axis)
