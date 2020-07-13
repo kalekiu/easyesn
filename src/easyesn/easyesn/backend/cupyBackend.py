@@ -87,5 +87,5 @@ def argmax(x, axis):
 def zeros_like(x):
     return cp.zeros_like(x)
 
-def ptp(x, axis):
-    return cp.subtract(cp.amax(x, axis),cp.amin(x, axis))
+def ptp(x, axis=None):
+    return cp.subtract(cp.amax(x, axis), cp.amin(x, axis))
