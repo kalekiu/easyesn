@@ -76,12 +76,13 @@ As already mentioned in the beginning, `easyesn` can be used either on the CPU o
 
 At the moment, these are supported backend names:
 
-| backend name | backend type |
-| ------------ |:------------:|
-|   `numpy`    | `numpy` (CPU)|
-|   `np`    | `numpy` (CPU)|
-|   `cupy`    | `cupy` (GPU)|
-|   `cp`    | `cupy` (GPU)|
+| backend name | backend type | Notes |
+| ------------ |:------------:|:-----:|
+|   `numpy`    | `numpy` (CPU)| |
+|   `np`    | `numpy` (CPU)| |
+|   `cupy`    | `cupy` (GPU)| no eig & arange function which is limiting the speed |
+|   `cp`    | `cupy` (GPU)| no eig & arange function which is limiting the speed |
+|   `torch`    | `torch` (CPU/GPU)| **experimental** (Blasting fast but tested/developed for only on PredictionESN)|
 
 # Notes
 As of right now, the `GradientOptimizer` does not fully work - we are looking into this and try to fix the issue.
@@ -95,4 +96,4 @@ At the moment the `easyesn` library covers not only all basic features of reserv
 
 - Ensemble ESNs (25%)
 - Adding support for deep learning methods as the output method (still open)
-- Improved GPU computing performance (still open)
+- Improved GPU computing performance (still partially open, predictionESN done)

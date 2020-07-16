@@ -1,100 +1,67 @@
 import numpy as np
 
-def add(x, y):
-	return np.add(x, y)
+add = np.add
 
-def substract(x, y):
-	return np.substract(x, y)
+substract = np.subtract
 
-def dot(x, y):
-	return np.dot(x, y)
+dot = np.dot
 
-def multiply(x, y):
-	return np.multiply(x, y)
+multiply = np.multiply
 
-def eigenval(x):
-	return np.linalg.eig(x)
+eigenval = np.linalg.eig
 
-def array(x):
-	return np.array(x)
+array = np.array
 
-def inv(x):
-	return np.linalg.inv(x)
+inv = np.linalg.inv
 
-def pinv(x):
-	return np.linalg.pinv(x)
+pinv = np.linalg.pinv
 
-def arctan(x):
-	return np.arctan(x)
+arctan = np.arctan
 
-def vstack(x):
-	return np.vstack(x)
+vstack = np.vstack
 
-def abs(x):
-	return np.abs(x)
+abs = np.abs
 
-def max(x):
-	return np.max(x)
+max = np.max
 
-def ones(x):
-	return np.ones(x)
+ones = np.ones
 
-def zeros(x):
-	return np.zeros(x)
+zeros = np.zeros
 
-def empty(x):
-	return np.empty(x)
+empty = np.empty
 
-def mean(x, axis=None):
-	return np.mean(x, axis)
+mean = np.mean
 
-def sqrt(x):
-	return np.sqrt(x)
+sqrt = np.sqrt
 
-def identity(x):
-	return np.identity(x)
+identity = np.identity
 
-def rand(*x):
-	return np.random.rand(*x)
+rand = np.random.rand
 
-def power(x, y):
-	return np.power(x, y)
+power = np.power
 
-def exp(x):
-	return np.exp(x)
+exp = np.exp
 
-def cosh(x):
-    return np.cosh(x)  
+cosh = np.cosh
 
-def log(x):
-    return np.log(x)
+log = np.log
 
-def tanh(x):
-	return np.tanh(x)
+tanh = np.tanh
 
-def concatenate(tuple, axis=0):
-	return np.concatenate(tuple, axis=axis)
+concatenate = np.concatenate
 
-def sign(x):
-	return np.sign(x)
+sign = np.sign
 
-def argmax(x, axis):
-    return np.argmax(x, axis)
+argmax = np.argmax
 
-def zeros_like(x):
-    return np.zeros_like(x)
+zeros_like = np.zeros_like
 
-def all(x):
-	return np.all(x)
+all = np.all
 
-def correlate(a, v, mode='valid'):
-	return np.correlate(a, v, mode=mode)
+correlate = np.correlate
 
-def var(x):
-	return np.var(x)
+var = np.var
 
-def allclose(x, y, atol=1e-05, rtol=0, equal_nan=False):
-    return np.allclose(x, y, atol, rtol, equal_nan)
+allclose = np.allclose
 
-def ptp(x, axis=None):
-    return np.ptp(x, axis)
+ptp = np.ptp

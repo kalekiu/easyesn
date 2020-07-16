@@ -21,7 +21,7 @@ if os.path.exists(_config_path):
     except ValueError:
         _config = {}
     _backend = _config.get('backend', _BACKEND)
-    assert _backend in {'numpy', 'np', 'cupy', 'cp'}
+    assert _backend in {'numpy', 'np', 'cupy', 'cp', 'torch'}
     
     if _backend == "cp":
         _backend = "cupy"
@@ -51,7 +51,7 @@ if not os.path.exists(_config_path):
 # Set backend based on EASYESN_BACKEND flag, if applicable.
 if 'EASYESN_BACKEND' in os.environ:
     _backend = os.environ['EASYESN_BACKEND']
-    assert _backend in {'numpy', 'np', 'cupy', 'cp'}
+    assert _backend in {'numpy', 'np', 'cupy', 'cp', 'torch'}
     
     if _backend == "cp":
         _backend = "cupy"
@@ -66,6 +66,9 @@ if _BACKEND == 'cupy':
 elif _BACKEND == 'numpy':
     sys.stderr.write('Using Numpy backend.\n')
     from .numpyBackend import *
+elif _BACKEND == 'torch':
+    sys.stderr.write('Using Torch backend.\n')
+    from .torchBackend import *
 else:
     raise ValueError('Unknown backend: ' + str(_BACKEND))
 

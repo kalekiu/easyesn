@@ -49,12 +49,6 @@ class PredictionESN(BaseESN):
                 sklearn_sag
         """
 
-    def setRegressionParameters(self, newRegressionParameters):
-        if not isinstance(newRegressionParameters, (list, tuple)) and np.isscalar(newRegressionParameters):
-            newRegressionParameters = [newRegressionParameters]
-
-        self._regressionParameters = newRegressionParameters
-
 
     """
         Fits the ESN so that by applying the inputData the outputData will be produced.
@@ -92,7 +86,10 @@ class PredictionESN(BaseESN):
         # Automatic transient time calculations
         if transientTime == "Auto":
             transientTime = self.calculateTransientTime(inputData[0], outputData[0], transientTimeCalculationEpsilon, transientTimeCalculationLength)
+            #transientTime = self.reduceTransientTime(inputData[0], outputData[0], transientTime)
         if transientTime == "AutoReduce":
+            print(outputData.shape)
+            print(inputData.shape)
             if (inputData is None and outputData.shape[2] == 1) or inputData.shape[2] == 1:
                 transientTime = self.calculateTransientTime(inputData[0], outputData[0], transientTimeCalculationEpsilon, transientTimeCalculationLength)
                 transientTime = self.reduceTransientTime(inputData[0], outputData[0], transientTime)

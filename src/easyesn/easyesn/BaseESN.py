@@ -5,7 +5,6 @@
 #from __future__ import absolute_import
 
 import numpy as np
-import numpy.random as rnd
 import dill as pickle
 import scipy as sp
 import progressbar
@@ -18,7 +17,7 @@ from . import backend as B
 class BaseESN(object):
     def __init__(self, n_input, n_reservoir, n_output,
                  spectralRadius=1.0, noiseLevel=0.01, inputScaling=None,
-                 leakingRate=1.0, feedbackScaling = 1.0,  reservoirDensity=0.2, randomSeed=None,
+                 leakingRate=1.0, feedbackScaling = 1.0, reservoirDensity=0.2, randomSeed=None,
                  out_activation=lambda x: x, out_inverse_activation=lambda x: x,
                  weightGeneration='naive', bias=1.0, outputBias=1.0, outputInputScaling=1.0,
                  feedback=False, inputDensity=1.0, activation = B.tanh, activationDerivation=lambda x: 1.0/B.cosh(x)**2):
@@ -52,7 +51,8 @@ class BaseESN(object):
         self.out_inverse_activation = out_inverse_activation
 
         if randomSeed is not None:
-            rnd.seed(randomSeed)
+            B.seed(randomSeed)
+            np.random.seed(randomSeed)
 
         self._bias = bias
         self._outputBias = outputBias
@@ -77,6 +77,7 @@ class BaseESN(object):
     def setFeedbackScaling(self, newFeedbackScaling):
         self._WFeedback = self._WFeedback * ( newFeedbackScaling / self._feedbackScaling)
         self._feedbackScaling = newFeedbackScaling
+
 
     def resetState(self):
         self._x = B.zeros_like(self._x)
@@ -169,17 +170,17 @@ class BaseESN(object):
         Generates a random rotation matrix, used in the SORM initilization (see http://ftp.math.uni-rostock.de/pub/preprint/2012/pre12_01.pdf)
     """
     def create_random_rotation_matrix(self):
-        h = rnd.randint(low=0, high=self.n_reservoir)
-        k = rnd.randint(low=0, high=self.n_reservoir)
+        h = B.randint(low=0, high=self.n_reservoir)
+        k = B.randint(low=0, high=self.n_reservoir)
 
-        phi = rnd.rand(1)*2*np.pi
+        phi = B.rand(1)*2*np.pi
 
         Q = B.identity(self.n_reservoir)
-        Q[h, h] = np.cos(phi)
-        Q[k, k] = np.cos(phi)
+        Q[h, h] = B.cos(phi)
+        Q[k, k] = B.cos(phi)
 
-        Q[h, k] = -np.sin(phi)
-        Q[k, h] = np.sin(phi)
+        Q[h, k] = -B.sin(phi)
+        Q[k, h] = B.sin(phi)
 
         return Q
 
@@ -190,10 +191,10 @@ class BaseESN(object):
         #naive generation of the matrix W by using random weights
         if weightGeneration == 'naive':
             #random weight matrix from -0.5 to 0.5
-            self._W = B.array(rnd.rand(self.n_reservoir, self.n_reservoir) - 0.5)
+            self._W = B.array(B.rand(self.n_reservoir, self.n_reservoir) - 0.5)
 
             #set sparseness% to zero
-            mask = rnd.rand(self.n_reservoir, self.n_reservoir) > self._reservoirDensity
+            mask = B.rand(self.n_reservoir, self.n_reservoir) > self._reservoirDensity
             self._W[mask] = 0.0
 
             _W_eigenvalues = B.abs(B.eigenval(self._W)[0])
@@ -206,7 +207,7 @@ class BaseESN(object):
             number_nonzero_elements = self._reservoirDensity * self.n_reservoir * self.n_reservoir
             i = 0
 
-            while np.count_nonzero(self._W) < number_nonzero_elements:
+            while B.count_nonzero(self._W) < number_nonzero_elements:
                 i += 1
                 Q = self.create_random_rotation_matrix()
                 self._W = Q.dot(self._W)
@@ -223,7 +224,7 @@ class BaseESN(object):
 
             #random weight matrix from 0 to 0.5
 
-            self._W = B.array(rnd.rand(self.n_reservoir, self.n_reservoir) / 2)
+            self._W = B.array(B.rand(self.n_reservoir, self.n_reservoir) / 2)
 
             #set sparseness% to zero
             mask = B.rand(self.n_reservoir, self.n_reservoir) > self._reservoirDensity
@@ -233,7 +234,7 @@ class BaseESN(object):
             #just calculate the largest EV - hopefully this is the right code to do so...
             try:
                 #this is just a good approximation, so this code might fail
-                _W_eigenvalue = B.max(np.abs(sp.sparse.linalg.eigs(self._W, k=1)[0]))
+                _W_eigenvalue = B.max(B.abs(sp.sparse.linalg.eigs(self._W, k=1)[0]))
             except ArpackNoConvergence:
                 #this is the safe fall back method to calculate the EV
                 _W_eigenvalue = B.max(B.abs(sp.linalg.eigvals(self._W)))
@@ -242,12 +243,12 @@ class BaseESN(object):
             self._W *= self._spectralRadius / _W_eigenvalue
 
             if verbose:
-                M = self._leakingRate*self._W + (1 - self._leakingRate)*np.identity(n=self._W.shape[0])
-                M_eigenvalue = B.max(B.abs(B.eigenval(M)[0]))#np.max(np.abs(sp.sparse.linalg.eigs(M, k=1)[0]))
+                M = self._leakingRate*self._W + (1 - self._leakingRate)*B.identity(n=self._W.shape[0])
+                M_eigenvalue = B.max(B.abs(B.eigenval(M)[0]))#B.max(B.abs(sp.sparse.linalg.eigs(M, k=1)[0]))
                 print("eff. spectral radius: {0}".format(M_eigenvalue))
 
             #change random signs
-            random_signs = B.power(-1, rnd.random_integers(self.n_reservoir, self.n_reservoir))
+            random_signs = B.power(-1, B.random_integers(self.n_reservoir, self.n_reservoir))
 
             self._W = B.multiply(self._W, random_signs)
         elif weightGeneration == 'custom':
@@ -273,10 +274,10 @@ class BaseESN(object):
         #scale the inputDensity to prevent saturated reservoir nodes
         if (self.inputDensity != 1.0):
             #make the input matrix as dense as requested
-            input_topology = (np.ones_like(self._WInput) == 1.0)
+            input_topology = (B.ones_like(self._WInput) == 1.0)
             nb_non_zero_input = int(self.inputDensity * self.n_input)
             for n in range(self.n_reservoir):
-                input_topology[n][rnd.permutation(np.arange(1+self.n_input))[:nb_non_zero_input]] = False
+                input_topology[n][B.permutation(B.arange(1+self.n_input))[:nb_non_zero_input]] = False
 
             self._WInput[input_topology] = 0.0
 
@@ -285,7 +286,6 @@ class BaseESN(object):
     def calculateLinearNetworkTransmissions(self, u, x=None):
         if x is None:
             x = self._x
-
         return B.dot(self._WInput, B.vstack((B.array(self._bias), u))) + B.dot(self._W, x)
 
     """
@@ -302,7 +302,7 @@ class BaseESN(object):
             #update the states
             transmission = self.calculateLinearNetworkTransmissions(u, x)
             x *= (1.0-self._leakingRate)
-            x += self._leakingRate * self._activation(transmission + (B.rand()-0.5)*self._noiseLevel)
+            x += self._leakingRate * self._activation(transmission + (np.random.rand()-0.5)*self._noiseLevel)
         
             return u
 
@@ -317,7 +317,7 @@ class BaseESN(object):
                 transmission = self.calculateLinearNetworkTransmissions(u, x)
                 x *= (1.0-self._leakingRate)
                 x += self._leakingRate*self._activation(transmission +
-                     B.dot(self._WFeedback, B.vstack((B.array(self._outputBias), outputData))) + (B.rand()-0.5)*self._noiseLevel)
+                     B.dot(self._WFeedback, B.vstack((B.array(self._outputBias), outputData))) + (np.random.rand()-0.5)*self._noiseLevel)
 
                 return u
             else:
@@ -327,9 +327,9 @@ class BaseESN(object):
                 transmission = B.dot(self._W, x)
                 x *= (1.0-self._leakingRate)
                 x += self._leakingRate*self._activation(transmission + B.dot(self._WFeedback, B.vstack((B.array(self._outputBias), outputData))) +
-                     (B.rand()-0.5)*self._noiseLevel)
+                     (np.random.rand()-0.5)*self._noiseLevel)
 
-                return np.empty((0, 1))
+                return B.empty((0, 1))
 
     def calculateTransientTime(self, inputs, outputs, epsilon, proximityLength = None):
         # inputs: input of reserovoir
