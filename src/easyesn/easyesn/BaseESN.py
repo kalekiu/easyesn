@@ -6,7 +6,6 @@
 
 import numpy as np
 import dill as pickle
-import scipy as sp
 import progressbar
 from . import helper as hp
 
@@ -88,7 +87,7 @@ class BaseESN(object):
 
         inputLength = steps
         if inputData is None:
-            if outputData is not None: 
+            if outputData is not None:
                 inputLength = len(outputData)
         else:
             inputLength = len(inputData)
@@ -136,7 +135,7 @@ class BaseESN(object):
                             Y[t-transientTime, :] = previousOutputData
                     else:
                         previousOutputData = outputData[t]
-                
+
                     if (verbose > 0):
                         bar.update(t)
             else:
@@ -154,10 +153,10 @@ class BaseESN(object):
                         Y[t, :] = previousOutputData
                     else:
                         previousOutputData = outputData[t]
-                
+
                     if (verbose > 0):
                         bar.update(t)
-                                 
+
         if (verbose > 0):
             bar.finish()
 
@@ -211,7 +210,7 @@ class BaseESN(object):
                 i += 1
                 Q = self.create_random_rotation_matrix()
                 self._W = Q.dot(self._W)
-            
+
             self._W *= self._spectralRadius
 
         #generation using the proposed method of Yildiz
@@ -230,25 +229,17 @@ class BaseESN(object):
             mask = B.rand(self.n_reservoir, self.n_reservoir) > self._reservoirDensity
             self._W[mask] = 0.0
 
-            from scipy.sparse.linalg.eigen.arpack.arpack import ArpackNoConvergence
-            #just calculate the largest EV - hopefully this is the right code to do so...
-            try:
-                #this is just a good approximation, so this code might fail
-                _W_eigenvalue = B.max(B.abs(sp.sparse.linalg.eigs(self._W, k=1)[0]))
-            except ArpackNoConvergence:
-                #this is the safe fall back method to calculate the EV
-                _W_eigenvalue = B.max(B.abs(sp.linalg.eigvals(self._W)))
-            #_W_eigenvalue = B.max(B.abs(np.linalg.eig(self._W)[0]))
+            _W_eigenvalue = B.max(B.abs(B.eigvals(self._W)))
 
             self._W *= self._spectralRadius / _W_eigenvalue
 
             if verbose:
                 M = self._leakingRate*self._W + (1 - self._leakingRate)*B.identity(n=self._W.shape[0])
-                M_eigenvalue = B.max(B.abs(B.eigenval(M)[0]))#B.max(B.abs(sp.sparse.linalg.eigs(M, k=1)[0]))
+                M_eigenvalue = B.max(B.abs(B.eigenval(M)[0]))
                 print("eff. spectral radius: {0}".format(M_eigenvalue))
 
             #change random signs
-            random_signs = B.power(-1, B.random_integers(self.n_reservoir, self.n_reservoir))
+            random_signs = B.power(-1, B.randint(1, 3, (self.n_reservoir,)))
 
             self._W = B.multiply(self._W, random_signs)
         elif weightGeneration == 'custom':
@@ -303,7 +294,7 @@ class BaseESN(object):
             transmission = self.calculateLinearNetworkTransmissions(u, x)
             x *= (1.0-self._leakingRate)
             x += self._leakingRate * self._activation(transmission + (np.random.rand()-0.5)*self._noiseLevel)
-        
+
             return u
 
         else:
@@ -317,7 +308,7 @@ class BaseESN(object):
                 transmission = self.calculateLinearNetworkTransmissions(u, x)
                 x *= (1.0-self._leakingRate)
                 x += self._leakingRate*self._activation(transmission +
-                     B.dot(self._WFeedback, B.vstack((B.array(self._outputBias), outputData))) + (np.random.rand()-0.5)*self._noiseLevel)
+                                                        B.dot(self._WFeedback, B.vstack((B.array(self._outputBias), outputData))) + (np.random.rand()-0.5)*self._noiseLevel)
 
                 return u
             else:
@@ -327,7 +318,7 @@ class BaseESN(object):
                 transmission = B.dot(self._W, x)
                 x *= (1.0-self._leakingRate)
                 x += self._leakingRate*self._activation(transmission + B.dot(self._WFeedback, B.vstack((B.array(self._outputBias), outputData))) +
-                     (np.random.rand()-0.5)*self._noiseLevel)
+                                                        (np.random.rand()-0.5)*self._noiseLevel)
 
                 return B.empty((0, 1))
 
@@ -365,9 +356,9 @@ class BaseESN(object):
                 self.update(u, o, initial_x[i])
 
         #transient time could not be determined
-        raise ValueError("Transient time could not be determined - maybe the proximityLength is too big.")       
+        raise ValueError("Transient time could not be determined - maybe the proximityLength is too big.")
 
- 
+
     def reduceTransientTime(self, inputs, outputs, initialTransientTime, epsilon = 1e-3, proximityLength = 50):
         # inputs: input of reserovoir
         # outputs: output of reservoir
@@ -376,7 +367,7 @@ class BaseESN(object):
         # initialTransientTime: transient time with calculateTransientTime() method estimated
         # finds initial state with lower transient time and sets internal state to this state
         # returns the new transient time by calculating the convergence time of initial states found with SWD and Equilibrium method
- 
+
         def getEquilibriumState(inputs, outputs, epsilon = 1e-3):
             # inputs: input of reserovoir
             # outputs: output of reservoir
@@ -404,7 +395,7 @@ class BaseESN(object):
                 u = inputs[t].reshape(-1, 1) if inputs is not None else None
                 o = outputs[t].reshape(-1, 1) if outputs is not None else None
                 self.update(u, o, x)
-        
+
             return x
 
         length = inputs.shape[0] if inputs is not None else outputs.shape[0]
@@ -412,20 +403,20 @@ class BaseESN(object):
             proximityLength = int(length * 0.1)
             if proximityLength < 3:
                 proximityLength = 3
-     
+
         x = B.empty((2, self.n_reservoir, 1))
         equilibriumState = getEquilibriumState(inputs, outputs)
-     
+
         if inputs is None:
             swdPoint, _ = hp.SWD(outputs, int(initialTransientTime*0.8))
         else:
             swdPoint, _ = hp.SWD(inputs, int(initialTransientTime * 0.8))
-        
+
         swdState = getStateAtGivenPoint(inputs, outputs, swdPoint)
-        
+
         x[0] = equilibriumState
         x[1] = swdState
-        
+
         transientTime = 0
 
         countedConsecutiveSteps = 0

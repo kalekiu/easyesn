@@ -1,5 +1,5 @@
 import cupy as cp
-import numpy
+import numpy as np
 
 add = cp.add
 
@@ -87,5 +87,3 @@ seed = cp.random.seed
 permutation = cp.random.permutation
 
 randint = cp.random.randint
-
-random_integers = cp.random.random_integers

@@ -1,4 +1,7 @@
 import numpy as np
+from numpy import random
+import scipy as sp
+from scipy.sparse.linalg.eigen.arpack.arpack import ArpackNoConvergence
 
 add = np.add
 
@@ -9,6 +12,15 @@ dot = np.dot
 multiply = np.multiply
 
 eigenval = np.linalg.eig
+
+def eigvals(x):
+    try:
+        #this is just a good approximation, so this code might fail
+        _eig = sp.sparse.linalg.eigs(x)[0]
+    except ArpackNoConvergence:
+        #this is the safe fall back method to calculate the EV
+        _eig = sp.linalg.eigvals(x)
+    return _eig
 
 array = np.array
 
@@ -65,3 +77,5 @@ var = np.var
 allclose = np.allclose
 
 ptp = np.ptp
+
+randint = random.randint
