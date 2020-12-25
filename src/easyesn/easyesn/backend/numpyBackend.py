@@ -13,12 +13,35 @@ multiply = np.multiply
 
 eigenval = np.linalg.eig
 
+def ishermitian(A, tol=1e-6):
+    x = sp.rand(A.shape[0], 1)
+    y = sp.rand(A.shape[0], 1)
+    if A.dtype == complex:
+        x = x + 1.0j*sp.rand(A.shape[0], 1)
+        y = y + 1.0j*sp.rand(A.shape[0], 1)
+    xAy = np.dot((A*x).conjugate().T, y)
+    xAty = np.dot(x.conjugate().T, A*y)
+    diff = float(np.abs(xAy - xAty) / np.sqrt(np.abs(xAy*xAty)))
+    if diff < tol:
+        diff = 0
+        return True
+    else:
+        return False
+
 def eigvals(x):
     try:
-        #this is just a good approximation, so this code might fail
-        _eig = sp.sparse.linalg.eigs(x)[0]
+        if sp.sparse.isspmatrix(x):
+            if ishermitian(A):
+                _eig = sp.sparse.linalg.eigsh(x)[0]
+            else:
+                _eig = sp.sparse.linalg.eigs(x)[0]
+        else:
+            A = np.asmatrix(x)
+            if ishermitian(A):
+                _eig = sp.linalg.eigvalsh(x)
+            else:
+                _eig = sp.linalg.eigvals(x)
     except ArpackNoConvergence:
-        #this is the safe fall back method to calculate the EV
         _eig = sp.linalg.eigvals(x)
     return _eig
 

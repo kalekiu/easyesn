@@ -8,7 +8,7 @@ class GradientOptimizer(object):
     def _validateReservoir(self):
         if not np.isclose(self._reservoir._noiseLevel, 0.0):
             raise ValueError("Noise must be set to 0.0 for this optimizer, but it is set to {0}.".format(self._reservoir._noiseLevel))
-        if self._reservoir._solver is not "lsqr":
+        if self._reservoir._solver != "lsqr":
             raise ValueError("The reservoir's solver must be set to 'lsqr' (Ridge Regression) for this optimizer.")
 
     def __init__(self, reservoir, learningRate=0.0001):

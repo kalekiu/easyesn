@@ -19,7 +19,7 @@ eigenval = torch.eig
 
 eigvals = lambda x: torch.eig(x)[0]
 
-array = torch.as_tensor
+array = lambda x: torch.as_tensor(x).cuda()
 
 inv = torch.inverse
 
