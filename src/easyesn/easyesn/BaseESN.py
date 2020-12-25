@@ -132,7 +132,7 @@ class BaseESN(object):
                         else:
                             previousOutputData = B.dot(self._WOut, B.vstack((B.array(self._outputBias), self._x)))
                         if t >= transientTime:
-                            Y[t-transientTime, :] = previousOutputData
+                            Y[t-transientTime, :] = previousOutputData.ravel()
                     else:
                         previousOutputData = outputData[t]
 
