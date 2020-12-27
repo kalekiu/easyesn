@@ -13,20 +13,22 @@ multiply = np.multiply
 
 eigenval = np.linalg.eig
 
+
 def ishermitian(A, tol=1e-6):
     x = sp.rand(A.shape[0], 1)
     y = sp.rand(A.shape[0], 1)
     if A.dtype == complex:
-        x = x + 1.0j*sp.rand(A.shape[0], 1)
-        y = y + 1.0j*sp.rand(A.shape[0], 1)
-    xAy = np.dot((A*x).conjugate().T, y)
-    xAty = np.dot(x.conjugate().T, A*y)
-    diff = float(np.abs(xAy - xAty) / np.sqrt(np.abs(xAy*xAty)))
+        x = x + 1.0j * sp.rand(A.shape[0], 1)
+        y = y + 1.0j * sp.rand(A.shape[0], 1)
+    xAy = np.dot((A * x).conjugate().T, y)
+    xAty = np.dot(x.conjugate().T, A * y)
+    diff = float(np.abs(xAy - xAty) / np.sqrt(np.abs(xAy * xAty)))
     if diff < tol:
         diff = 0
         return True
     else:
         return False
+
 
 def eigvals(x):
     try:
@@ -44,6 +46,7 @@ def eigvals(x):
     except ArpackNoConvergence:
         _eig = sp.linalg.eigvals(x)
     return _eig
+
 
 array = np.array
 

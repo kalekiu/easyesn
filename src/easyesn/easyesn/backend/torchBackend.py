@@ -28,14 +28,14 @@ def set_dtype(dtype):
 
 if torch.cuda.is_available():
     set_device("torch")
-    sys.stderr.write('Torch Backend is using CUDA\n')
+    sys.stderr.write("Torch Backend is using CUDA\n")
 
 
 add = torch.add
 
 substract = torch.sub
 
-dot = lambda x, y: x@y
+dot = lambda x, y: x @ y
 
 multiply = torch.mul
 
@@ -57,11 +57,17 @@ abs = torch.abs
 
 max = torch.max
 
-ones = lambda *args, **kwargs: torch.ones(*args, **kwargs, device=__device, dtype=__dtype)
+ones = lambda *args, **kwargs: torch.ones(
+    *args, **kwargs, device=__device, dtype=__dtype
+)
 
-zeros = lambda *args, **kwargs: torch.zeros(*args, **kwargs, device=__device, dtype=__dtype)
+zeros = lambda *args, **kwargs: torch.zeros(
+    *args, **kwargs, device=__device, dtype=__dtype
+)
 
-empty = lambda *args, **kwargs: torch.empty(*args, **kwargs, device=__device, dtype=__dtype)
+empty = lambda *args, **kwargs: torch.empty(
+    *args, **kwargs, device=__device, dtype=__dtype
+)
 
 mean = torch.mean
 
@@ -96,7 +102,9 @@ var = torch.var
 allclose = torch.allclose
 
 # ptp emulation: definition extracted from numpy
-ptp = lambda x, axis=None: torch.sub(torch.max(x, dim=axis)[0], torch.min(x, dim=axis)[0])
+ptp = lambda x, axis=None: torch.sub(
+    torch.max(x, dim=axis)[0], torch.min(x, dim=axis)[0]
+)
 
 count_nonzero = torch.nonzero
 
