@@ -3,14 +3,12 @@
 """
 
 import numpy as np
-import numpy.random as rnd
 from .BaseESN import BaseESN
 
-from . import backend as B
+from easyesn import backend as B
 
 from sklearn.linear_model import Ridge
 from sklearn.svm import SVR
-from sklearn.linear_model import LogisticRegression
 import progressbar
 from .OneHotEncoder import OneHotEncoder
 

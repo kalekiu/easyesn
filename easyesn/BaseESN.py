@@ -7,11 +7,7 @@
 import numpy as np
 import dill as pickle
 import progressbar
-from . import helper as hp
-
-# import backend as B
-
-from . import backend as B
+from easyesn import backend as B, helper as hp
 
 
 class BaseESN(object):

@@ -6,15 +6,13 @@ import numpy as np
 import itertools
 import operator
 import progressbar
-from .. import helper as hlp
+from easyesn import helper as hlp
 
 from multiprocessing import (
     Process,
     Queue,
-    Manager,
     Pool,
 )  # we require Pathos version >=0.2.6. Otherwise we will get an "EOFError: Ran out of input" exception
-import multiprocessing
 
 
 class GridSearchOptimizer:

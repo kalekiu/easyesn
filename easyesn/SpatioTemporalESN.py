@@ -3,31 +3,22 @@
 """
 
 import numpy as np
-import numpy.random as rnd
 from easyesn.BaseESN import BaseESN
 
 from easyesn import backend as B
 
-from sklearn.linear_model import Ridge
-from sklearn.svm import SVR
-from sklearn.linear_model import LogisticRegression
 import progressbar
 import sys
 
 # import dill
 
-import multiprocess
 from multiprocess import (
-    Process,
-    Queue,
     Manager,
     Pool,
     cpu_count,
 )  # we require Pathos version >=0.2.6. Otherwise we will get an "EOFError: Ran out of input" exception
 
 # import multiprocessing
-import ctypes
-from multiprocessing import process
 
 
 class PredictionArrayIterator:

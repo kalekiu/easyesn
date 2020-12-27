@@ -3,7 +3,7 @@
 """
 
 import numpy as np
-from . import backend as B
+from easyesn import backend as B
 
 """
     Calculates the mutual information between the two signals x and y.

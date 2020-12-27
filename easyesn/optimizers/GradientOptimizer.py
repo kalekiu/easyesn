@@ -1,6 +1,5 @@
 import numpy as np
-from .. import helper as hlp
-from .. import backend as B
+from easyesn import backend as B, helper as hlp
 
 import progressbar
 
