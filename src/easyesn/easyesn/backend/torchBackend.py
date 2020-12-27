@@ -2,10 +2,34 @@ import sys
 import torch
 import numpy as np
 
+
+__device = torch.device("cpu")
+__dtype = "float32"
+
+
+def get_device():
+    return __device
+
+
+def set_device(device):
+    global __device
+    __device = torch.device(device)
+
+
+def get_dtype():
+    return __dtype
+
+
+def set_dtype(dtype):
+    global __dtype
+    assert dtype in ("float32", "float64")
+    __dtype = dtype
+
+
 if torch.cuda.is_available():
+    set_device("torch")
     sys.stderr.write('Torch Backend is using CUDA\n')
-else:
-    sys.stderr.write('Torch Backend is not using CUDA\n')
+
 
 add = torch.add
 
@@ -19,7 +43,7 @@ eigenval = torch.eig
 
 eigvals = lambda x: torch.eig(x)[0]
 
-array = lambda x: torch.as_tensor(x).cuda()
+array = lambda x: torch.as_tensor(x, device=__device, dtype=__dtype)
 
 inv = torch.inverse
 
@@ -27,46 +51,23 @@ pinv = torch.pinverse
 
 arctan = torch.atan
 
-#atleast_2d needed by vstack emulation
-def atleast_2d(*arys):
-    res = []
-    for ary in arys:
-        ary = torch.as_tensor(ary, dtype=torch.double)
-        if ary.ndim == 0:
-            result = ary.reshape(1, 1)
-        elif ary.ndim == 1:
-            result = ary[np.newaxis, :]
-        else:
-            result = ary
-        res.append(result)
-    if len(res) == 1:
-        return res[0]
-    else:
-        return res
-
-#definition of vstack emulation taken from numpy
-def vstack(tup):
-    arrs = atleast_2d(*tup)
-    if not isinstance(arrs, list):
-        arrs = [arrs]
-    x = torch.cat(arrs, dim=0)
-    return x
+vstack = lambda tup: torch.vstack([array(x) for x in tup])
 
 abs = torch.abs
 
 max = torch.max
 
-ones = torch.ones
+ones = lambda *args, **kwargs: torch.ones(*args, **kwargs, device=__device, dtype=__dtype)
 
-zeros = torch.zeros
+zeros = lambda *args, **kwargs: torch.zeros(*args, **kwargs, device=__device, dtype=__dtype)
 
-empty = torch.empty
+empty = lambda *args, **kwargs: torch.empty(*args, **kwargs, device=__device, dtype=__dtype)
 
 mean = torch.mean
 
 sqrt = torch.sqrt
 
-identity = torch.nn.Identity
+identity = lambda n: torch.eye(n, device=__device, dtype=__dtype)
 
 rand = torch.rand
 
@@ -119,4 +120,4 @@ seed = torch.seed
 
 permutation = torch.randperm
 
-randint = torch.randint
+randint = lambda *args, **kwargs: torch.randint(*args, **kwargs, device=__device)

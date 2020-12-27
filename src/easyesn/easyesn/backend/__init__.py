@@ -2,10 +2,10 @@ import sys
 import os
 import json
 
-#default backend
+# default backend
 _BACKEND = 'numpy'
 
-#inspired by Keras backend handling
+# inspired by Keras backend handling
 
 # Obtain easyesn base directory path: either ~/.easyesn or /tmp.
 _easyesn_base_dir = os.path.expanduser('~')
@@ -71,6 +71,7 @@ elif _BACKEND == 'torch':
     from .torchBackend import *
 else:
     raise ValueError('Unknown backend: ' + str(_BACKEND))
+
 
 def backendName():
     """Publicly accessible method
