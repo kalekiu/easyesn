@@ -4,31 +4,49 @@ from .. import backend as B
 
 import progressbar
 
+
 class GradientOptimizer(object):
     def _validateReservoir(self):
         if not np.isclose(self._reservoir._noiseLevel, 0.0):
-            raise ValueError("Noise must be set to 0.0 for this optimizer, but it is set to {0}.".format(self._reservoir._noiseLevel))
-        if self._reservoir._solver is not "lsqr":
-            raise ValueError("The reservoir's solver must be set to 'lsqr' (Ridge Regression) for this optimizer.")
+            raise ValueError(
+                "Noise must be set to 0.0 for this optimizer, but it is set to {0}.".format(
+                    self._reservoir._noiseLevel
+                )
+            )
+        if self._reservoir._solver != "lsqr":
+            raise ValueError(
+                "The reservoir's solver must be set to 'lsqr' (Ridge Regression) for this optimizer."
+            )
 
     def __init__(self, reservoir, learningRate=0.0001):
         self._reservoir = reservoir
         self._validateReservoir()
         self.setLearningRate(learningRate)
 
-
     def setLearningRate(self, learningRate):
         if np.isscalar(learningRate):
             self._learningRates = (learningRate, learningRate, learningRate)
         else:
             if len(learningRate) != 3:
-                raise ValueError("LearningRate has to be a scalar or a list/tuple with 3 entries.")
+                raise ValueError(
+                    "LearningRate has to be a scalar or a list/tuple with 3 entries."
+                )
             else:
                 self._learningRates = learningRate
 
     ####################################################################################################################################################
 
-    def _derivationLrSrIsFs(self, oldDerivatives, W_uniform, W_in_uniform, u, x, generative=False, W_fb_uniform = 0, oldy = 0):
+    def _derivationLrSrIsFs(
+        self,
+        oldDerivatives,
+        W_uniform,
+        W_in_uniform,
+        u,
+        x,
+        generative=False,
+        W_fb_uniform=0,
+        oldy=0,
+    ):
         doldLr, doldSr, doldIs, doldFs = oldDerivatives
         a = self._reservoir._leakingRate
         X = self._reservoir.calculateLinearNetworkTransmissions(u)
@@ -36,14 +54,25 @@ class GradientOptimizer(object):
         activationX = self._reservoir._activation(X)
         activationDerivationX = self._reservoir._activationDerivation(X)
 
-        dLr = (1-a) * doldLr - x + activationX + a * activationDerivationX * B.dot(self._reservoir._W, doldLr)
-        dSr = (1-a) * doldSr + a * activationDerivationX * (B.dot(self._reservoir._W, doldSr) + B.dot(W_uniform, x))
+        dLr = (
+            (1 - a) * doldLr
+            - x
+            + activationX
+            + a * activationDerivationX * B.dot(self._reservoir._W, doldLr)
+        )
+        dSr = (1 - a) * doldSr + a * activationDerivationX * (
+            B.dot(self._reservoir._W, doldSr) + B.dot(W_uniform, x)
+        )
 
-        u = B.vstack((1,u))
-        dIs = (1-a) * doldIs + a * activationDerivationX * (B.dot(self._reservoir._W, doldIs) + B.dot(W_in_uniform, u))
+        u = B.vstack((1, u))
+        dIs = (1 - a) * doldIs + a * activationDerivationX * (
+            B.dot(self._reservoir._W, doldIs) + B.dot(W_in_uniform, u)
+        )
 
         if generative:
-            dFs = (1 - a) * doldFs + a * activationDerivationX * ( B.dot(self._reservoir.W, doldFs) + B.dot(W_fb_uniform, oldy) )
+            dFs = (1 - a) * doldFs + a * activationDerivationX * (
+                B.dot(self._reservoir.W, doldFs) + B.dot(W_fb_uniform, oldy)
+            )
             return dLr, dSr, dIs, dFs
 
         return dLr, dSr, dIs
@@ -51,52 +80,109 @@ class GradientOptimizer(object):
     # del W_out / del beta
     def derivationForPenalty(self, Y, X, penalty):
         X_T = X.T
-        term2 = B.inv( B.dot( X, X_T ) + penalty * B.identity(1 + self._reservoir.n_input + self._reservoir.n_reservoir) )
-        
-        return -B.dot( B.dot( Y, X_T ), B.dot( term2, term2 ) )
+        term2 = B.inv(
+            B.dot(X, X_T)
+            + penalty
+            * B.identity(1 + self._reservoir.n_input + self._reservoir.n_reservoir)
+        )
+
+        return -B.dot(B.dot(Y, X_T), B.dot(term2, term2))
 
     # del W_out / del (alpha, rho or s_in)
     def derivationWoutForP(self, Y, X, XPrime):
         X_T = X.T
         XPrime_T = XPrime.T
 
-        term1 = B.inv(B.dot(X,X_T) + self._reservoir._regressionParameters[0]*B.identity(1 + self._reservoir.n_input + self._reservoir.n_reservoir))
-        term2 = B.dot( XPrime, X_T) + B.dot( X, XPrime_T )
+        term1 = B.inv(
+            B.dot(X, X_T)
+            + self._reservoir._regressionParameters[0]
+            * B.identity(1 + self._reservoir.n_input + self._reservoir.n_reservoir)
+        )
+        term2 = B.dot(XPrime, X_T) + B.dot(X, XPrime_T)
 
-        return B.dot( Y, B.dot( XPrime_T, term1 ) - B.dot( B.dot( B.dot( X_T, term1 ), term2 ), term1 ) )
+        return B.dot(
+            Y, B.dot(XPrime_T, term1) - B.dot(B.dot(B.dot(X_T, term1), term2), term1)
+        )
+
     ####################################################################################################################################################
 
+    def fit(
+        self,
+        trainingInput,
+        trainingOutput,
+        validationInput,
+        validationOutput,
+        epochs=1,
+        transientTime=None,
+        verbose=1,
+    ):
+        self.optimizeParameterForTrainError(
+            trainingInput,
+            trainingOutput,
+            validationInput,
+            validationOutput,
+            epochs,
+            transientTime,
+            verbose,
+        )
+        self.optimizePenaltyForEvaluationError(
+            trainingInput,
+            trainingOutput,
+            validationInput,
+            validationOutput,
+            epochs,
+            transientTime,
+            verbose,
+        )
+        self.optimizeParameterForValidationError(
+            trainingInput,
+            trainingOutput,
+            validationInput,
+            validationOutput,
+            epochs,
+            transientTime,
+            verbose,
+        )
 
-    def fit(self, trainingInput, trainingOutput, validationInput, validationOutput, epochs=1, transientTime=None, verbose=1):
-        self.optimizeParameterForTrainError(trainingInput, trainingOutput, validationInput, validationOutput, epochs, transientTime, verbose)
-        self.optimizePenaltyForEvaluationError(trainingInput, trainingOutput, validationInput, validationOutput, epochs, transientTime, verbose)
-        self.optimizeParameterForValidationError(trainingInput, trainingOutput, validationInput, validationOutput, epochs, transientTime, verbose)
-
-    def optimizeParameterForTrainError(self, trainingInputData, trainingOutputData, validationInputData, validationOutputData,
-                                       epochs=1, transientTime=None, verbose=1):
+    def optimizeParameterForTrainError(
+        self,
+        trainingInputData,
+        trainingOutputData,
+        validationInputData,
+        validationOutputData,
+        epochs=1,
+        transientTime=None,
+        verbose=1,
+    ):
 
         self._validateReservoir()
 
         learningRate = self._learningRates[0]
         if self._reservoir._inputScaling.shape[0] != 1:
-            raise ValueError("Only penalty optimization is supported for a multiple input scalings at the moment. We are working on it.")
+            raise ValueError(
+                "Only penalty optimization is supported for a multiple input scalings at the moment. We are working on it."
+            )
 
         # calculate stuff
         trainLength = trainingInputData.shape[0]
         if transientTime is None:
-            transientTime = self._reservoir.estimateTransientTime(trainingInputData, trainingOutputData)
+            transientTime = self._reservoir.estimateTransientTime(
+                trainingInputData, trainingOutputData
+            )
 
         # initializations of arrays:
-        if (len(trainingOutputData.shape) == 1):
+        if len(trainingOutputData.shape) == 1:
             Ytarget = trainingOutputData[None, transientTime:].T
         else:
             Ytarget = trainingOutputData[transientTime:].T
 
-        if (len(validationOutputData.shape) == 1):
+        if len(validationOutputData.shape) == 1:
             validationOutputData = validationOutputData[:, None]
 
         Ytarget = self._reservoir.out_inverse_activation(Ytarget)
-        validationOutputData = self._reservoir.out_inverse_activation(validationOutputData)
+        validationOutputData = self._reservoir.out_inverse_activation(
+            validationOutputData
+        )
 
         originalLearningRate = learningRate
 
@@ -114,9 +200,24 @@ class GradientOptimizer(object):
         isGradients = B.zeros(trainLength - transientTime)
 
         # collecting the single derivatives  - > this is the derivation of design matrix when filled
-        srGradientsMatrix = B.zeros((self._reservoir.n_reservoir + self._reservoir.n_input + 1, trainLength - transientTime))
-        lrGradientsMatrix = B.zeros((self._reservoir.n_reservoir + self._reservoir.n_input + 1, trainLength - transientTime))
-        isGradientsMatrix = B.zeros((self._reservoir.n_reservoir + self._reservoir.n_input + 1, trainLength - transientTime))
+        srGradientsMatrix = B.zeros(
+            (
+                self._reservoir.n_reservoir + self._reservoir.n_input + 1,
+                trainLength - transientTime,
+            )
+        )
+        lrGradientsMatrix = B.zeros(
+            (
+                self._reservoir.n_reservoir + self._reservoir.n_input + 1,
+                trainLength - transientTime,
+            )
+        )
+        isGradientsMatrix = B.zeros(
+            (
+                self._reservoir.n_reservoir + self._reservoir.n_input + 1,
+                trainLength - transientTime,
+            )
+        )
 
         # initialize fallback Parameter
         oldSR = self._reservoir._spectralRadius
@@ -124,14 +225,18 @@ class GradientOptimizer(object):
         oldIS = self._reservoir._inputScaling
 
         # initialize self.designMatrix and self.W_out
-        oldLoss = self._reservoir.fit(trainingInputData, trainingOutputData, transientTime=transientTime)
+        oldLoss = self._reservoir.fit(
+            trainingInputData, trainingOutputData, transientTime=transientTime
+        )
 
         # Calculate uniform matrices
         W_uniform = self._reservoir._W / self._reservoir._spectralRadius
         W_in_uniform = self._reservoir._WInput / self._reservoir._inputScaling
 
-        if (verbose > 0):
-            bar = progressbar.ProgressBar(max_value=epochs, redirect_stdout=True, poll_interval=0.0001)
+        if verbose > 0:
+            bar = progressbar.ProgressBar(
+                max_value=epochs, redirect_stdout=True, poll_interval=0.0001
+            )
             bar.update(0)
 
         for epoch in range(epochs):
@@ -151,30 +256,74 @@ class GradientOptimizer(object):
                 u = u.reshape(-1, 1)
                 oldx = x
 
-                #apply the update method by using the input and the output
+                # apply the update method by using the input and the output
                 self._reservoir.update(u, trainingOutputData[t])
                 x = self._reservoir._x
                 # x = self._reservoir._X[2:,t]
 
-
                 # calculate the del /x del (rho, alpha, s_in)
-                derivationLeakingRate, derivationSpectralRadius, derivationInputScaling = self._derivationLrSrIsFs( (derivationLeakingRate, derivationSpectralRadius, derivationInputScaling, None), W_uniform, W_in_uniform, u, oldx)
+                (
+                    derivationLeakingRate,
+                    derivationSpectralRadius,
+                    derivationInputScaling,
+                ) = self._derivationLrSrIsFs(
+                    (
+                        derivationLeakingRate,
+                        derivationSpectralRadius,
+                        derivationInputScaling,
+                        None,
+                    ),
+                    W_uniform,
+                    W_in_uniform,
+                    u,
+                    oldx,
+                )
                 if t >= transientTime:
 
                     # concatenate with zeros (for the derivatives of the input and the 1, which are always 0)
-                    derivationConcatinationSpectralRadius = B.concatenate( (B.zeros(self._reservoir.n_input + 1), derivationSpectralRadius[:, 0]), axis=0)
-                    derivationConcatinationLeakingRate = B.concatenate( (B.zeros(self._reservoir.n_input + 1), derivationLeakingRate[:, 0]), axis=0)
-                    derivationConcatinationInputScaling = B.concatenate( (B.zeros(self._reservoir.n_input + 1), derivationInputScaling[:, 0]), axis=0)
+                    derivationConcatinationSpectralRadius = B.concatenate(
+                        (
+                            B.zeros(self._reservoir.n_input + 1),
+                            derivationSpectralRadius[:, 0],
+                        ),
+                        axis=0,
+                    )
+                    derivationConcatinationLeakingRate = B.concatenate(
+                        (
+                            B.zeros(self._reservoir.n_input + 1),
+                            derivationLeakingRate[:, 0],
+                        ),
+                        axis=0,
+                    )
+                    derivationConcatinationInputScaling = B.concatenate(
+                        (
+                            B.zeros(self._reservoir.n_input + 1),
+                            derivationInputScaling[:, 0],
+                        ),
+                        axis=0,
+                    )
 
                     # add to matrix
-                    srGradientsMatrix[:, t - transientTime] = derivationConcatinationSpectralRadius
-                    lrGradientsMatrix[:, t - transientTime] = derivationConcatinationLeakingRate
-                    isGradientsMatrix[:, t - transientTime] = derivationConcatinationInputScaling
+                    srGradientsMatrix[
+                        :, t - transientTime
+                    ] = derivationConcatinationSpectralRadius
+                    lrGradientsMatrix[
+                        :, t - transientTime
+                    ] = derivationConcatinationLeakingRate
+                    isGradientsMatrix[
+                        :, t - transientTime
+                    ] = derivationConcatinationInputScaling
 
             # calculate del W_out / del (rho, alpha, s_in) based on the designMatrix and the derivative of the designMatrix we just calculated
-            WoutPrimeSR = self.derivationWoutForP(Ytarget, self._reservoir._X, srGradientsMatrix)
-            WoutPrimeLR = self.derivationWoutForP(Ytarget, self._reservoir._X, lrGradientsMatrix)
-            WoutPrimeIS = self.derivationWoutForP(Ytarget, self._reservoir._X, isGradientsMatrix)
+            WoutPrimeSR = self.derivationWoutForP(
+                Ytarget, self._reservoir._X, srGradientsMatrix
+            )
+            WoutPrimeLR = self.derivationWoutForP(
+                Ytarget, self._reservoir._X, lrGradientsMatrix
+            )
+            WoutPrimeIS = self.derivationWoutForP(
+                Ytarget, self._reservoir._X, isGradientsMatrix
+            )
 
             # reinitialize the states
             x = B.zeros((self._reservoir.n_reservoir, 1))
@@ -187,14 +336,38 @@ class GradientOptimizer(object):
                 if t >= transientTime:
 
                     # calculate error at given time step
-                    error = (trainingOutputData[t] - B.dot( self._reservoir._WOut, B.vstack((1, u, x)) ) ).T
+                    error = (
+                        trainingOutputData[t]
+                        - B.dot(self._reservoir._WOut, B.vstack((1, u, x)))
+                    ).T
 
                     # calculate gradients
-                    gradientSR = B.dot(-error, B.dot(WoutPrimeSR, B.vstack((1, u, x))[:, 0]) + B.dot(self._reservoir._WOut, srGradientsMatrix[:, t - transientTime]))
+                    gradientSR = B.dot(
+                        -error,
+                        B.dot(WoutPrimeSR, B.vstack((1, u, x))[:, 0])
+                        + B.dot(
+                            self._reservoir._WOut,
+                            srGradientsMatrix[:, t - transientTime],
+                        ),
+                    )
                     srGradients[t - transientTime] = gradientSR
-                    gradientLR = B.dot(-error, B.dot(WoutPrimeLR, B.vstack((1, u, x))[:, 0]) + B.dot(self._reservoir._WOut, lrGradientsMatrix[:, t - transientTime]))
+                    gradientLR = B.dot(
+                        -error,
+                        B.dot(WoutPrimeLR, B.vstack((1, u, x))[:, 0])
+                        + B.dot(
+                            self._reservoir._WOut,
+                            lrGradientsMatrix[:, t - transientTime],
+                        ),
+                    )
                     lrGradients[t - transientTime] = gradientLR
-                    gradientIS = B.dot(-error, B.dot(WoutPrimeIS, B.vstack((1, u, x))[:, 0]) + B.dot(self._reservoir._WOut, isGradientsMatrix[:, t - transientTime]))
+                    gradientIS = B.dot(
+                        -error,
+                        B.dot(WoutPrimeIS, B.vstack((1, u, x))[:, 0])
+                        + B.dot(
+                            self._reservoir._WOut,
+                            isGradientsMatrix[:, t - transientTime],
+                        ),
+                    )
                     isGradients[t - transientTime] = gradientIS
 
             # sum up the gradients del error / del (rho, alpha, s_in) to get final gradient
@@ -203,24 +376,36 @@ class GradientOptimizer(object):
             gradientIS = sum(isGradients)
 
             # normalize gradients to length 1
-            gradientVectorLength = B.sqrt(gradientSR ** 2 + gradientLR ** 2 + gradientIS ** 2)
+            gradientVectorLength = B.sqrt(
+                gradientSR ** 2 + gradientLR ** 2 + gradientIS ** 2
+            )
 
             gradientSR /= gradientVectorLength
             gradientLR /= gradientVectorLength
             gradientIS /= gradientVectorLength
 
             # update spectral radius
-            self._reservoir.setSpectralRadius(self._reservoir._spectralRadius - learningRate * gradientSR)
+            self._reservoir.setSpectralRadius(
+                self._reservoir._spectralRadius - learningRate * gradientSR
+            )
 
             # update leaking rate
-            self._reservoir.setLeakingRate( self._reservoir._leakingRate - learningRate * gradientLR )
+            self._reservoir.setLeakingRate(
+                self._reservoir._leakingRate - learningRate * gradientLR
+            )
 
             # update input scaling
-            self._reservoir.setInputScaling(self._reservoir._inputScaling - learningRate * gradientIS)
+            self._reservoir.setInputScaling(
+                self._reservoir._inputScaling - learningRate * gradientIS
+            )
 
             # calculate the errors and update the self.designMatrix and the W_out
-            fitLoss = self._reservoir.fit(trainingInputData, trainingOutputData, transientTime=transientTime)
-            validationLoss = hlp.loss( self._reservoir.predict(validationInputData), validationOutputData )
+            fitLoss = self._reservoir.fit(
+                trainingInputData, trainingOutputData, transientTime=transientTime
+            )
+            validationLoss = hlp.loss(
+                self._reservoir.predict(validationInputData), validationOutputData
+            )
 
             if fitLoss > oldLoss:
                 self._reservoir.setSpectralRadius(oldSR)
@@ -228,8 +413,8 @@ class GradientOptimizer(object):
                 self._reservoir.setInputScaling(oldIS)
                 learningRate = learningRate / 2
             else:
-                learningRate = min(learningRate*1.5, originalLearningRate)
-               
+                learningRate = min(learningRate * 1.5, originalLearningRate)
+
                 oldSR = self._reservoir._spectralRadius
                 oldLR = self._reservoir._leakingRate
                 oldIS = self._reservoir._inputScaling
@@ -244,35 +429,56 @@ class GradientOptimizer(object):
         if verbose > 0:
             bar.finish()
 
-        return (validationLosses, fitLosses, inputScalings, leakingRates, spectralRadiuses, learningRates)
+        return (
+            validationLosses,
+            fitLosses,
+            inputScalings,
+            leakingRates,
+            spectralRadiuses,
+            learningRates,
+        )
 
-    def optimizeParameterForValidationError(self, trainingInputData, trainingOutputData, validationInputData, validationOutputData,
-                                            epochs=1, transientTime=None, verbose=1):
+    def optimizeParameterForValidationError(
+        self,
+        trainingInputData,
+        trainingOutputData,
+        validationInputData,
+        validationOutputData,
+        epochs=1,
+        transientTime=None,
+        verbose=1,
+    ):
 
         self._validateReservoir()
 
         learningRate = self._learningRates[1]
         if self._reservoir._inputScaling.shape[0] != 1:
-            raise ValueError("Only penalty optimization is supported for a multiple input scalings at the moment. We are working on it.")
+            raise ValueError(
+                "Only penalty optimization is supported for a multiple input scalings at the moment. We are working on it."
+            )
 
         # calculate stuff
         trainLength = trainingInputData.shape[0]
         if transientTime is None:
-            transientTime = self._reservoir.estimateTransientTime(trainingInputData, trainingOutputData)
+            transientTime = self._reservoir.estimateTransientTime(
+                trainingInputData, trainingOutputData
+            )
 
         validationLength = trainingInputData.shape[0]
 
         # initializations of arrays:
-        if (len(trainingOutputData.shape) == 1):
+        if len(trainingOutputData.shape) == 1:
             Ytarget = trainingOutputData[None, transientTime:].T
         else:
             Ytarget = trainingOutputData[transientTime:].T
 
-        if (len(validationOutputData.shape) == 1):
+        if len(validationOutputData.shape) == 1:
             validationOutputData = validationOutputData[:, None]
 
         Ytarget = self._reservoir.out_inverse_activation(Ytarget)
-        validationOutputData = self._reservoir.out_inverse_activation(validationOutputData)
+        validationOutputData = self._reservoir.out_inverse_activation(
+            validationOutputData
+        )
 
         originalLearningRate = learningRate
 
@@ -290,9 +496,24 @@ class GradientOptimizer(object):
         isGradients = B.zeros(validationLength)
 
         # collecting the single derivatives  - > this is the derivation of design matrix when filled
-        srGradientsMatrix = B.zeros((self._reservoir.n_reservoir + self._reservoir.n_input + 1, trainLength - transientTime))
-        lrGradientsMatrix = B.zeros((self._reservoir.n_reservoir + self._reservoir.n_input + 1, trainLength - transientTime))
-        isGradientsMatrix = B.zeros((self._reservoir.n_reservoir + self._reservoir.n_input + 1, trainLength - transientTime))
+        srGradientsMatrix = B.zeros(
+            (
+                self._reservoir.n_reservoir + self._reservoir.n_input + 1,
+                trainLength - transientTime,
+            )
+        )
+        lrGradientsMatrix = B.zeros(
+            (
+                self._reservoir.n_reservoir + self._reservoir.n_input + 1,
+                trainLength - transientTime,
+            )
+        )
+        isGradientsMatrix = B.zeros(
+            (
+                self._reservoir.n_reservoir + self._reservoir.n_input + 1,
+                trainLength - transientTime,
+            )
+        )
 
         # initialize variables for the "when the error goes up, go back and divide learning rate by 2" mechanism
         oldSR = self._reservoir._spectralRadius
@@ -300,15 +521,21 @@ class GradientOptimizer(object):
         oldIS = self._reservoir._inputScaling
 
         # initialize self.designMatrix and self.W_out
-        self._reservoir.fit(trainingInputData, trainingOutputData, transientTime=transientTime)
-        oldLoss = hlp.loss( self._reservoir.predict(validationInputData), validationOutputData )
+        self._reservoir.fit(
+            trainingInputData, trainingOutputData, transientTime=transientTime
+        )
+        oldLoss = hlp.loss(
+            self._reservoir.predict(validationInputData), validationOutputData
+        )
 
         # Calculate uniform matrices
         W_uniform = self._reservoir._W / self._reservoir._spectralRadius
         W_in_uniform = self._reservoir._WInput / self._reservoir._inputScaling
 
-        if (verbose > 0):
-            bar = progressbar.ProgressBar(max_value=epochs, redirect_stdout=True, poll_interval=0.0001)
+        if verbose > 0:
+            bar = progressbar.ProgressBar(
+                max_value=epochs, redirect_stdout=True, poll_interval=0.0001
+            )
             bar.update(0)
 
         for epoch in range(epochs):
@@ -325,22 +552,61 @@ class GradientOptimizer(object):
             for t, u in enumerate(trainingInputData):
                 u = u.reshape(-1, 1)
                 oldx = x
-                x = self._reservoir._X[self._reservoir.n_input + 1:, t - transientTime]
+                x = self._reservoir._X[self._reservoir.n_input + 1 :, t - transientTime]
 
                 # calculate the del /x del (rho, alpha, s_in)
 
-                derivationLeakingRate, derivationSpectralRadius, derivationInputScaling = self._derivationLrSrIsFs( (derivationLeakingRate, derivationSpectralRadius, derivationInputScaling, None), W_uniform, W_in_uniform, u, oldx)
+                (
+                    derivationLeakingRate,
+                    derivationSpectralRadius,
+                    derivationInputScaling,
+                ) = self._derivationLrSrIsFs(
+                    (
+                        derivationLeakingRate,
+                        derivationSpectralRadius,
+                        derivationInputScaling,
+                        None,
+                    ),
+                    W_uniform,
+                    W_in_uniform,
+                    u,
+                    oldx,
+                )
                 if t >= transientTime:
 
                     # concatenate with zeros (for the derivatives of the input and the 1, which are always 0)
-                    srGradientsMatrix[:, t - transientTime] = B.concatenate( (B.zeros(self._reservoir.n_input + 1), derivationSpectralRadius[:, 0]), axis=0)
-                    lrGradientsMatrix[:, t - transientTime] = B.concatenate( (B.zeros(self._reservoir.n_input + 1), derivationLeakingRate[:, 0]), axis=0)
-                    isGradientsMatrix[:, t - transientTime] = B.concatenate( (B.zeros(self._reservoir.n_input + 1), derivationInputScaling[:, 0]), axis=0)
+                    srGradientsMatrix[:, t - transientTime] = B.concatenate(
+                        (
+                            B.zeros(self._reservoir.n_input + 1),
+                            derivationSpectralRadius[:, 0],
+                        ),
+                        axis=0,
+                    )
+                    lrGradientsMatrix[:, t - transientTime] = B.concatenate(
+                        (
+                            B.zeros(self._reservoir.n_input + 1),
+                            derivationLeakingRate[:, 0],
+                        ),
+                        axis=0,
+                    )
+                    isGradientsMatrix[:, t - transientTime] = B.concatenate(
+                        (
+                            B.zeros(self._reservoir.n_input + 1),
+                            derivationInputScaling[:, 0],
+                        ),
+                        axis=0,
+                    )
 
             # add to matrix
-            WoutPrimeSR = self.derivationWoutForP(Ytarget, self._reservoir._X, srGradientsMatrix)
-            WoutPrimeLR = self.derivationWoutForP(Ytarget, self._reservoir._X, lrGradientsMatrix)
-            WoutPrimeIS = self.derivationWoutForP(Ytarget, self._reservoir._X, isGradientsMatrix)
+            WoutPrimeSR = self.derivationWoutForP(
+                Ytarget, self._reservoir._X, srGradientsMatrix
+            )
+            WoutPrimeLR = self.derivationWoutForP(
+                Ytarget, self._reservoir._X, lrGradientsMatrix
+            )
+            WoutPrimeIS = self.derivationWoutForP(
+                Ytarget, self._reservoir._X, isGradientsMatrix
+            )
 
             # this time go through validation length
             for t, u in enumerate(validationInputData):
@@ -350,21 +616,66 @@ class GradientOptimizer(object):
                 x = self._reservoir._x
 
                 # calculate error at given time step
-                error = (validationOutputData[t] - B.dot( self._reservoir._WOut, B.vstack((1, u, x)) ) ).T
+                error = (
+                    validationOutputData[t]
+                    - B.dot(self._reservoir._WOut, B.vstack((1, u, x)))
+                ).T
 
-                derivationLeakingRate, derivationSpectralRadius, derivationInputScaling = self._derivationLrSrIsFs((derivationLeakingRate, derivationSpectralRadius, derivationInputScaling, None), W_uniform, W_in_uniform, u, oldx)
+                (
+                    derivationLeakingRate,
+                    derivationSpectralRadius,
+                    derivationInputScaling,
+                ) = self._derivationLrSrIsFs(
+                    (
+                        derivationLeakingRate,
+                        derivationSpectralRadius,
+                        derivationInputScaling,
+                        None,
+                    ),
+                    W_uniform,
+                    W_in_uniform,
+                    u,
+                    oldx,
+                )
 
                 # concatenate derivations with 0
-                derivationConcatinationSpectralRadius = B.concatenate( (B.zeros(self._reservoir.n_input + 1), derivationSpectralRadius[:, 0]), axis=0)
-                derivationConcatinationLeakingRate = B.concatenate( (B.zeros(self._reservoir.n_input + 1), derivationLeakingRate[:, 0]), axis=0)
-                derivationConcatinationInputScaling = B.concatenate( (B.zeros(self._reservoir.n_input + 1), derivationInputScaling[:, 0]), axis=0)
+                derivationConcatinationSpectralRadius = B.concatenate(
+                    (
+                        B.zeros(self._reservoir.n_input + 1),
+                        derivationSpectralRadius[:, 0],
+                    ),
+                    axis=0,
+                )
+                derivationConcatinationLeakingRate = B.concatenate(
+                    (B.zeros(self._reservoir.n_input + 1), derivationLeakingRate[:, 0]),
+                    axis=0,
+                )
+                derivationConcatinationInputScaling = B.concatenate(
+                    (
+                        B.zeros(self._reservoir.n_input + 1),
+                        derivationInputScaling[:, 0],
+                    ),
+                    axis=0,
+                )
 
                 # calculate gradients
-                gradientSR = B.dot(-error, B.dot(self._reservoir._WOut, derivationConcatinationSpectralRadius) + B.dot(WoutPrimeSR, B.vstack((1, u, x))[:, 0]))
+                gradientSR = B.dot(
+                    -error,
+                    B.dot(self._reservoir._WOut, derivationConcatinationSpectralRadius)
+                    + B.dot(WoutPrimeSR, B.vstack((1, u, x))[:, 0]),
+                )
                 srGradients[t] = gradientSR
-                gradientLR = B.dot(-error, B.dot(self._reservoir._WOut, derivationConcatinationLeakingRate) + B.dot(WoutPrimeLR, B.vstack( (1, u, x))[:, 0]))
+                gradientLR = B.dot(
+                    -error,
+                    B.dot(self._reservoir._WOut, derivationConcatinationLeakingRate)
+                    + B.dot(WoutPrimeLR, B.vstack((1, u, x))[:, 0]),
+                )
                 lrGradients[t] = gradientLR
-                gradientIS = B.dot(-error, B.dot(self._reservoir._WOut, derivationConcatinationInputScaling) + B.dot(WoutPrimeIS, B.vstack( (1, u, x))[:, 0]))
+                gradientIS = B.dot(
+                    -error,
+                    B.dot(self._reservoir._WOut, derivationConcatinationInputScaling)
+                    + B.dot(WoutPrimeIS, B.vstack((1, u, x))[:, 0]),
+                )
                 isGradients[t] = gradientIS
 
             # sum up the gradients del error / del (rho, alpha, s_in) to get final gradient
@@ -373,24 +684,36 @@ class GradientOptimizer(object):
             gradientIS = sum(isGradients)
 
             # normalize length of gradient to 1
-            gradientVectorLength = B.sqrt(gradientSR ** 2 + gradientLR ** 2 + gradientIS ** 2)
+            gradientVectorLength = B.sqrt(
+                gradientSR ** 2 + gradientLR ** 2 + gradientIS ** 2
+            )
 
             gradientSR /= gradientVectorLength
             gradientLR /= gradientVectorLength
             gradientIS /= gradientVectorLength
 
             # update spectral radius
-            self._reservoir.setSpectralRadius(self._reservoir._spectralRadius - learningRate * gradientSR)
+            self._reservoir.setSpectralRadius(
+                self._reservoir._spectralRadius - learningRate * gradientSR
+            )
 
             # update leaking rate
-            self._reservoir.setLeakingRate(self._reservoir._leakingRate - learningRate * gradientLR)
+            self._reservoir.setLeakingRate(
+                self._reservoir._leakingRate - learningRate * gradientLR
+            )
 
             # update input scaling
-            self._reservoir.setInputScaling(self._reservoir._inputScaling - learningRate * gradientIS)
+            self._reservoir.setInputScaling(
+                self._reservoir._inputScaling - learningRate * gradientIS
+            )
 
             # calculate the errors and update the self.designMatrix and the W_out
-            fitLoss = self._reservoir.fit(trainingInputData, trainingOutputData, transientTime=transientTime)
-            validationLoss = hlp.loss( self._reservoir.predict(validationInputData), validationOutputData )
+            fitLoss = self._reservoir.fit(
+                trainingInputData, trainingOutputData, transientTime=transientTime
+            )
+            validationLoss = hlp.loss(
+                self._reservoir.predict(validationInputData), validationOutputData
+            )
 
             # this is the "when the error goes up, go back and divide learning rate by 2" mechanism
             if validationLoss > oldLoss:
@@ -399,7 +722,7 @@ class GradientOptimizer(object):
                 self._reservoir.setInputScaling(oldIS)
                 learningRate = learningRate / 2
             else:
-                learningRate = min(learningRate*1.5, originalLearningRate)
+                learningRate = min(learningRate * 1.5, originalLearningRate)
 
                 oldSR = self._reservoir._spectralRadius
                 oldLR = self._reservoir._leakingRate
@@ -417,10 +740,26 @@ class GradientOptimizer(object):
         if verbose > 0:
             bar.finish()
 
-        return (validationLosses, fitLosses, inputScalings, leakingRates, spectralRadiuses, learningRates)
+        return (
+            validationLosses,
+            fitLosses,
+            inputScalings,
+            leakingRates,
+            spectralRadiuses,
+            learningRates,
+        )
 
-    def optimizePenaltyForEvaluationError(self, trainingInputData, trainingOutputData, validationInputData, validationOutputData,
-                                          epochs=1, penalty=0.1, transientTime=0, verbose=1):
+    def optimizePenaltyForEvaluationError(
+        self,
+        trainingInputData,
+        trainingOutputData,
+        validationInputData,
+        validationOutputData,
+        epochs=1,
+        penalty=0.1,
+        transientTime=0,
+        verbose=1,
+    ):
 
         self._validateReservoir()
 
@@ -429,16 +768,18 @@ class GradientOptimizer(object):
         validationLength = validationOutputData.shape[0]
 
         # initializations of arrays:
-        if (len(trainingOutputData.shape) == 1):
+        if len(trainingOutputData.shape) == 1:
             Ytarget = trainingOutputData[None, transientTime:].T
         else:
             Ytarget = trainingOutputData[transientTime:].T
 
-        if (len(validationOutputData.shape) == 1):
+        if len(validationOutputData.shape) == 1:
             validationOutputData = validationOutputData[:, None]
 
         Ytarget = self._reservoir.out_inverse_activation(Ytarget)
-        validationOutputData = self._reservoir.out_inverse_activation(validationOutputData)
+        validationOutputData = self._reservoir.out_inverse_activation(
+            validationOutputData
+        )
 
         originalLearningRate = learningRate
 
@@ -450,10 +791,19 @@ class GradientOptimizer(object):
         penaltyDerivatives = B.zeros(validationLength)
         oldPenalty = penalty
 
-        self._reservoir.fit(trainingInputData, trainingOutputData, transientTime=transientTime)
-        oldLoss = hlp.loss(self._reservoir.predict(validationInputData), validationOutputData)
+        self._reservoir.fit(
+            trainingInputData, trainingOutputData, transientTime=transientTime
+        )
+        oldLoss = hlp.loss(
+            self._reservoir.predict(validationInputData), validationOutputData
+        )
 
-        evaluationEchoFunction = B.zeros((1 + self._reservoir.n_reservoir + self._reservoir.n_input, validationLength))
+        evaluationEchoFunction = B.zeros(
+            (
+                1 + self._reservoir.n_reservoir + self._reservoir.n_input,
+                validationLength,
+            )
+        )
         x = self._reservoir._x
 
         for t, u in enumerate(validationInputData):
@@ -463,43 +813,62 @@ class GradientOptimizer(object):
 
             evaluationEchoFunction[:, t] = B.vstack((1, u, x)).squeeze()
 
-        if (verbose > 0):
-            bar = progressbar.ProgressBar(max_value=epochs, redirect_stdout=True, poll_interval=0.0001)
+        if verbose > 0:
+            bar = progressbar.ProgressBar(
+                max_value=epochs, redirect_stdout=True, poll_interval=0.0001
+            )
             bar.update(0)
 
         for epoch in range(epochs):
             if verbose > 0:
                 bar.update(epoch)
 
-            penaltyDerivative = self.derivationForPenalty(Ytarget, self._reservoir._X, penalty)
+            penaltyDerivative = self.derivationForPenalty(
+                Ytarget, self._reservoir._X, penalty
+            )
 
             for t in range(len(validationInputData)):
-                predictionPoint = B.dot(self._reservoir._WOut, evaluationEchoFunction[:, t].reshape(-1, 1))
+                predictionPoint = B.dot(
+                    self._reservoir._WOut, evaluationEchoFunction[:, t].reshape(-1, 1)
+                )
                 error = (trainingOutputData[t] - predictionPoint).T
 
-                penaltyDerivatives[t] = - B.dot(B.dot(error, penaltyDerivative), evaluationEchoFunction[:, t])
+                penaltyDerivatives[t] = -B.dot(
+                    B.dot(error, penaltyDerivative), evaluationEchoFunction[:, t]
+                )
 
             penaltyGradient = sum(penaltyDerivatives)
 
-            penaltyGradient = B.sign( penaltyGradient )
+            penaltyGradient = B.sign(penaltyGradient)
 
             penalty = penalty - learningRate * penaltyGradient
 
             self._reservoir.setRegressionParameters(penalty)
-            
-            self._reservoir._W_out = B.dot(B.dot(Ytarget, self._reservoir._X.T), B.inv(B.dot(self._reservoir._X, self._reservoir._X.T) + \
-                self._reservoir._regressionParameters[0]*B.identity(1+self._reservoir.n_input+self._reservoir.n_reservoir)))
 
+            self._reservoir._W_out = B.dot(
+                B.dot(Ytarget, self._reservoir._X.T),
+                B.inv(
+                    B.dot(self._reservoir._X, self._reservoir._X.T)
+                    + self._reservoir._regressionParameters[0]
+                    * B.identity(
+                        1 + self._reservoir.n_input + self._reservoir.n_reservoir
+                    )
+                ),
+            )
 
-            fitLoss = hlp.loss( self._reservoir.predict( trainingInputData), trainingOutputData )
-            validationLoss = hlp.loss( self._reservoir.predict(validationInputData), validationOutputData )
+            fitLoss = hlp.loss(
+                self._reservoir.predict(trainingInputData), trainingOutputData
+            )
+            validationLoss = hlp.loss(
+                self._reservoir.predict(validationInputData), validationOutputData
+            )
 
             # this is the "when the error goes up, go back and divide learning rate by 2" mechanism
             if validationLoss > oldLoss:
                 penalty = oldPenalty
                 learningRate = learningRate / 2
             else:
-                learningRate = min(learningRate*1.5, originalLearningRate)
+                learningRate = min(learningRate * 1.5, originalLearningRate)
 
                 oldPenalty = penalty
                 oldLoss = validationLoss
@@ -513,11 +882,21 @@ class GradientOptimizer(object):
 
         return (validationLosses, fitLosses, penalties, learningRates)
 
-
-
     #####################################################################################################################################################
 
-    def _derivationLrSrIsFsGenerative(self, oldDerivatives, ooldDerivatives, derivativesWout, W_uniform, W_in_uniform, W_fb_uniform, u, oldX, ooldX, oldy):
+    def _derivationLrSrIsFsGenerative(
+        self,
+        oldDerivatives,
+        ooldDerivatives,
+        derivativesWout,
+        W_uniform,
+        W_in_uniform,
+        W_fb_uniform,
+        u,
+        oldX,
+        ooldX,
+        oldy,
+    ):
         doldSr, doldLr, doldIs, doldFs = oldDerivatives
         dooldXSr, dooldXLr, dooldXIs, dooldXFs = ooldDerivatives
         dWoutIs, dWoutLr, dWoutSr, dWoutFs = derivativesWout
@@ -525,7 +904,12 @@ class GradientOptimizer(object):
         a = self._reservoir._leakingRate
         X = self._reservoir.calculateLinearNetworkTransmissions(u)
         u = B.vstack((1, u))
-        dooldXSr, dooldXLr, dooldXIs, dooldXFs = B.vstack(( B.zeros_like(u), dooldXSr)), B.vstack(( B.zeros_like(u), dooldXLr)), B.vstack(( B.zeros_like(u), dooldXIs)), B.vstack(( B.zeros_like(u), dooldXFs))
+        dooldXSr, dooldXLr, dooldXIs, dooldXFs = (
+            B.vstack((B.zeros_like(u), dooldXSr)),
+            B.vstack((B.zeros_like(u), dooldXLr)),
+            B.vstack((B.zeros_like(u), dooldXIs)),
+            B.vstack((B.zeros_like(u), dooldXFs)),
+        )
         ooldX = B.vstack((u, ooldX))
 
         activationX = self._reservoir._activation(X)
@@ -536,18 +920,46 @@ class GradientOptimizer(object):
         dySr = B.dot(self._reservoir._WOut, dooldXSr) + B.dot(dWoutSr, ooldX)
         dyFs = B.dot(self._reservoir._WOut, dooldXFs) + B.dot(dWoutFs, ooldX)
 
-        dLr = (1-a) * doldLr - oldX + activationX + a * activationDerivationX * (B.dot(self._reservoir._W, doldLr) + B.dot(self._reservoir._WFeedback, dyLr))
-        dSr = (1-a) * doldSr + a * activationDerivationX * (B.dot(self._reservoir._W, doldSr) + B.dot(W_uniform, oldX) + B.dot(self._reservoir._WFeedback, dySr))
+        dLr = (
+            (1 - a) * doldLr
+            - oldX
+            + activationX
+            + a
+            * activationDerivationX
+            * (
+                B.dot(self._reservoir._W, doldLr)
+                + B.dot(self._reservoir._WFeedback, dyLr)
+            )
+        )
+        dSr = (1 - a) * doldSr + a * activationDerivationX * (
+            B.dot(self._reservoir._W, doldSr)
+            + B.dot(W_uniform, oldX)
+            + B.dot(self._reservoir._WFeedback, dySr)
+        )
 
-        dIs = (1-a) * doldIs + a * activationDerivationX * (B.dot(self._reservoir._W, doldIs) + B.dot(W_in_uniform, u) + B.dot(self._reservoir._WFeedback, dyIs))
+        dIs = (1 - a) * doldIs + a * activationDerivationX * (
+            B.dot(self._reservoir._W, doldIs)
+            + B.dot(W_in_uniform, u)
+            + B.dot(self._reservoir._WFeedback, dyIs)
+        )
 
-        dFs = (1-a) * doldFs + a * activationDerivationX * (B.dot(self._reservoir.W, doldFs) + B.dot(W_fb_uniform, oldy) + B.dot(self._reservoir.W_feedback, dyFs))
+        dFs = (1 - a) * doldFs + a * activationDerivationX * (
+            B.dot(self._reservoir.W, doldFs)
+            + B.dot(W_fb_uniform, oldy)
+            + B.dot(self._reservoir.W_feedback, dyFs)
+        )
 
         return dLr, dSr, dIs, dFs
 
-
-    def optimizeParameterForGenerativeValidationError(self, trainingInputData, trainingOutputData, validationOutputData,
-                                            epochs=1, transientTime=None, verbose=1):
+    def optimizeParameterForGenerativeValidationError(
+        self,
+        trainingInputData,
+        trainingOutputData,
+        validationOutputData,
+        epochs=1,
+        transientTime=None,
+        verbose=1,
+    ):
 
         self._validateReservoir()
 
@@ -555,25 +967,30 @@ class GradientOptimizer(object):
 
         if not np.isscalar(self._reservoir._inputScaling):
             raise ValueError(
-                "Only penalty optimization is supported for a multiple input scalings at the moment. We are working on it.")
+                "Only penalty optimization is supported for a multiple input scalings at the moment. We are working on it."
+            )
 
         # calculate stuff
         trainLength = trainingInputData.shape[0]
         optimizationLength = validationOutputData.shape[0]
         if transientTime is None:
-            transientTime = self._reservoir.estimateTransientTime(trainingInputData, trainingOutputData)
+            transientTime = self._reservoir.estimateTransientTime(
+                trainingInputData, trainingOutputData
+            )
 
         # initializations of arrays:
-        if (len(trainingOutputData.shape) == 1):
+        if len(trainingOutputData.shape) == 1:
             Ytarget = trainingOutputData[None, transientTime:].T
         else:
             Ytarget = trainingOutputData[transientTime:].T
 
-        if (len(validationOutputData.shape) == 1):
+        if len(validationOutputData.shape) == 1:
             validationOutputData = validationOutputData[:, None]
 
         Ytarget = self._reservoir.out_inverse_activation(Ytarget)
-        validationOutputData = self._reservoir.out_inverse_activation(validationOutputData)
+        validationOutputData = self._reservoir.out_inverse_activation(
+            validationOutputData
+        )
 
         originalLearningRate = learningRate
 
@@ -594,17 +1011,38 @@ class GradientOptimizer(object):
 
         # collecting the single derivatives  - > this is the derivation of design matrix when filled
         srGradientsMatrix = B.zeros(
-            (self._reservoir.n_reservoir + self._reservoir.n_input + 1, trainLength - transientTime))
+            (
+                self._reservoir.n_reservoir + self._reservoir.n_input + 1,
+                trainLength - transientTime,
+            )
+        )
         lrGradientsMatrix = B.zeros(
-            (self._reservoir.n_reservoir + self._reservoir.n_input + 1, trainLength - transientTime))
+            (
+                self._reservoir.n_reservoir + self._reservoir.n_input + 1,
+                trainLength - transientTime,
+            )
+        )
         isGradientsMatrix = B.zeros(
-            (self._reservoir.n_reservoir + self._reservoir.n_input + 1, trainLength - transientTime))
+            (
+                self._reservoir.n_reservoir + self._reservoir.n_input + 1,
+                trainLength - transientTime,
+            )
+        )
         fsGradientsMatrix = B.zeros(
-            (self._reservoir.n_reservoir + self._reservoir.n_input + 1, trainLength - transientTime))
+            (
+                self._reservoir.n_reservoir + self._reservoir.n_input + 1,
+                trainLength - transientTime,
+            )
+        )
 
         # initialize self.designMatrix and self.W_out
-        self._reservoir.fit(trainingInputData, trainingOutputData, transientTime=transientTime)
-        oldLoss = hlp.loss(self._reservoir.generate(optimizationLength, trainingInputData[-1]), validationOutputData)
+        self._reservoir.fit(
+            trainingInputData, trainingOutputData, transientTime=transientTime
+        )
+        oldLoss = hlp.loss(
+            self._reservoir.generate(optimizationLength, trainingInputData[-1]),
+            validationOutputData,
+        )
 
         # initialize variables for the "when the error goes up, go back and divide learning rate by 2" mechanism
         oldSR = self._reservoir._spectralRadius
@@ -612,14 +1050,15 @@ class GradientOptimizer(object):
         oldIS = self._reservoir._inputScaling
         oldFS = self._reservoir._feedbackScaling
 
-
         # Calculate uniform matrices
         W_uniform = self._reservoir._W / self._reservoir._spectralRadius
         W_in_uniform = self._reservoir._WInput / self._reservoir._inputScaling
         W_fb_uniform = self._reservoir._WFeedback / self._reservoir._feedbackScaling
 
-        if (verbose > 0):
-            bar = progressbar.ProgressBar(max_value=epochs, redirect_stdout=True, poll_interval=0.0001)
+        if verbose > 0:
+            bar = progressbar.ProgressBar(
+                max_value=epochs, redirect_stdout=True, poll_interval=0.0001
+            )
             bar.update(0)
 
         for epoch in range(epochs):
@@ -651,32 +1090,102 @@ class GradientOptimizer(object):
                 x = self._reservoir._X[2:, t]
 
                 # calculate the del /x del (rho, alpha, s_in)
-                derivationLeakingRate, derivationSpectralRadius, derivationInputScaling, derivationFeedbackScaling = self._derivationLrSrIsFs(
-                    (oldDerivationSpectralRadius, oldDerivationLeakingRate, oldDerivationInputScaling, oldDerivationFeedbackScaling),
-                    (ooldDerivationSpectralRadius, ooldDerivationLeakingRate, ooldDerivationInputScaling, ooldDerivationFeedbackScaling),
-                    W_uniform, W_in_uniform, u, oldx, generative=True, W_fb_uniform = W_fb_uniform, oldy = trainingInputData[:,t+1])
+                (
+                    derivationLeakingRate,
+                    derivationSpectralRadius,
+                    derivationInputScaling,
+                    derivationFeedbackScaling,
+                ) = self._derivationLrSrIsFs(
+                    (
+                        oldDerivationSpectralRadius,
+                        oldDerivationLeakingRate,
+                        oldDerivationInputScaling,
+                        oldDerivationFeedbackScaling,
+                    ),
+                    (
+                        ooldDerivationSpectralRadius,
+                        ooldDerivationLeakingRate,
+                        ooldDerivationInputScaling,
+                        ooldDerivationFeedbackScaling,
+                    ),
+                    W_uniform,
+                    W_in_uniform,
+                    u,
+                    oldx,
+                    generative=True,
+                    W_fb_uniform=W_fb_uniform,
+                    oldy=trainingInputData[:, t + 1],
+                )
 
-                ooldDerivationSpectralRadius, ooldDerivationLeakingRate, ooldDerivationInputScaling, ooldDerivationFeedbackScaling = oldDerivationSpectralRadius, oldDerivationLeakingRate, oldDerivationInputScaling, oldDerivationFeedbackScaling
-                oldDerivationSpectralRadius, oldDerivationLeakingRate, oldDerivationInputScaling, oldDerivationFeedbackScaling = derivationLeakingRate, derivationSpectralRadius, derivationInputScaling, derivationFeedbackScaling
+                (
+                    ooldDerivationSpectralRadius,
+                    ooldDerivationLeakingRate,
+                    ooldDerivationInputScaling,
+                    ooldDerivationFeedbackScaling,
+                ) = (
+                    oldDerivationSpectralRadius,
+                    oldDerivationLeakingRate,
+                    oldDerivationInputScaling,
+                    oldDerivationFeedbackScaling,
+                )
+                (
+                    oldDerivationSpectralRadius,
+                    oldDerivationLeakingRate,
+                    oldDerivationInputScaling,
+                    oldDerivationFeedbackScaling,
+                ) = (
+                    derivationLeakingRate,
+                    derivationSpectralRadius,
+                    derivationInputScaling,
+                    derivationFeedbackScaling,
+                )
 
                 if t >= transientTime:
                     # concatenate with zeros (for the derivatives of the input and the 1, which are always 0)
                     srGradientsMatrix[:, t - transientTime] = B.concatenate(
-                        (B.zeros(self._reservoir.n_input + 1), derivationSpectralRadius[:, 0]), axis=0)
+                        (
+                            B.zeros(self._reservoir.n_input + 1),
+                            derivationSpectralRadius[:, 0],
+                        ),
+                        axis=0,
+                    )
                     lrGradientsMatrix[:, t - transientTime] = B.concatenate(
-                        (B.zeros(self._reservoir.n_input + 1), derivationLeakingRate[:, 0]), axis=0)
+                        (
+                            B.zeros(self._reservoir.n_input + 1),
+                            derivationLeakingRate[:, 0],
+                        ),
+                        axis=0,
+                    )
                     isGradientsMatrix[:, t - transientTime] = B.concatenate(
-                        (B.zeros(self._reservoir.n_input + 1), derivationInputScaling[:, 0]), axis=0)
+                        (
+                            B.zeros(self._reservoir.n_input + 1),
+                            derivationInputScaling[:, 0],
+                        ),
+                        axis=0,
+                    )
                     fsGradientsMatrix[:, t - transientTime] = B.concatenate(
-                        (B.zeros(self._reservoir.n_input + 1), derivationFeedbackScaling[:, 0]), axis=0)
+                        (
+                            B.zeros(self._reservoir.n_input + 1),
+                            derivationFeedbackScaling[:, 0],
+                        ),
+                        axis=0,
+                    )
 
             # add to matrix
-            WoutPrimeSR = self.derivationWoutForP(Ytarget, self._reservoir._X, srGradientsMatrix)
-            WoutPrimeLR = self.derivationWoutForP(Ytarget, self._reservoir._X, lrGradientsMatrix)
-            WoutPrimeIS = self.derivationWoutForP(Ytarget, self._reservoir._X, isGradientsMatrix)
-            WoutPrimeFS = self.derivationWoutForP(Ytarget, self._reservoir._X, fsGradientsMatrix)
+            WoutPrimeSR = self.derivationWoutForP(
+                Ytarget, self._reservoir._X, srGradientsMatrix
+            )
+            WoutPrimeLR = self.derivationWoutForP(
+                Ytarget, self._reservoir._X, lrGradientsMatrix
+            )
+            WoutPrimeIS = self.derivationWoutForP(
+                Ytarget, self._reservoir._X, isGradientsMatrix
+            )
+            WoutPrimeFS = self.derivationWoutForP(
+                Ytarget, self._reservoir._X, fsGradientsMatrix
+            )
 
-            y =  trainingOutputData[-1]
+            y = trainingOutputData[-1]
 
             # this time go through validation length
             for t, ytarget in enumerate(validationOutputData):
@@ -691,42 +1200,109 @@ class GradientOptimizer(object):
                 error = (ytarget - y).T
 
                 # calculate the del /x del (rho, alpha, s_in)
-                derivationLeakingRate, derivationSpectralRadius, derivationInputScaling, derivationFeedbackScaling = self._derivationLrSrIsFsGenerative(
-                    (oldDerivationSpectralRadius, oldDerivationLeakingRate, oldDerivationInputScaling, oldDerivationFeedbackScaling),
-                    (ooldDerivationSpectralRadius, ooldDerivationLeakingRate, ooldDerivationInputScaling, ooldDerivationFeedbackScaling),
+                (
+                    derivationLeakingRate,
+                    derivationSpectralRadius,
+                    derivationInputScaling,
+                    derivationFeedbackScaling,
+                ) = self._derivationLrSrIsFsGenerative(
+                    (
+                        oldDerivationSpectralRadius,
+                        oldDerivationLeakingRate,
+                        oldDerivationInputScaling,
+                        oldDerivationFeedbackScaling,
+                    ),
+                    (
+                        ooldDerivationSpectralRadius,
+                        ooldDerivationLeakingRate,
+                        ooldDerivationInputScaling,
+                        ooldDerivationFeedbackScaling,
+                    ),
                     (WoutPrimeSR, WoutPrimeLR, WoutPrimeIS, WoutPrimeFS),
-                    W_uniform, W_in_uniform, W_fb_uniform, u, oldx, ooldx, oldy)
+                    W_uniform,
+                    W_in_uniform,
+                    W_fb_uniform,
+                    u,
+                    oldx,
+                    ooldx,
+                    oldy,
+                )
 
-                ooldDerivationSpectralRadius, ooldDerivationLeakingRate, ooldDerivationInputScaling, ooldDerivationFeedbackScaling = oldDerivationSpectralRadius, oldDerivationLeakingRate, oldDerivationInputScaling, oldDerivationFeedbackScaling
-                oldDerivationSpectralRadius, oldDerivationLeakingRate, oldDerivationInputScaling, oldDerivationFeedbackScaling = derivationLeakingRate, derivationSpectralRadius, derivationInputScaling, derivationFeedbackScaling
+                (
+                    ooldDerivationSpectralRadius,
+                    ooldDerivationLeakingRate,
+                    ooldDerivationInputScaling,
+                    ooldDerivationFeedbackScaling,
+                ) = (
+                    oldDerivationSpectralRadius,
+                    oldDerivationLeakingRate,
+                    oldDerivationInputScaling,
+                    oldDerivationFeedbackScaling,
+                )
+                (
+                    oldDerivationSpectralRadius,
+                    oldDerivationLeakingRate,
+                    oldDerivationInputScaling,
+                    oldDerivationFeedbackScaling,
+                ) = (
+                    derivationLeakingRate,
+                    derivationSpectralRadius,
+                    derivationInputScaling,
+                    derivationFeedbackScaling,
+                )
                 oldy = y
 
                 # concatenate derivations with 0
                 derivationConcatinationSpectralRadius = B.concatenate(
-                    (B.zeros(self._reservoir.n_input + 1), derivationSpectralRadius[:, 0]), axis=0)
+                    (
+                        B.zeros(self._reservoir.n_input + 1),
+                        derivationSpectralRadius[:, 0],
+                    ),
+                    axis=0,
+                )
                 derivationConcatinationLeakingRate = B.concatenate(
-                    (B.zeros(self._reservoir.n_input + 1), derivationLeakingRate[:, 0]), axis=0)
+                    (B.zeros(self._reservoir.n_input + 1), derivationLeakingRate[:, 0]),
+                    axis=0,
+                )
                 derivationConcatinationInputScaling = B.concatenate(
-                    (B.zeros(self._reservoir.n_input + 1), derivationInputScaling[:, 0]), axis=0)
+                    (
+                        B.zeros(self._reservoir.n_input + 1),
+                        derivationInputScaling[:, 0],
+                    ),
+                    axis=0,
+                )
                 derivationConcatinationFeedbackScaling = B.concatenate(
-                    (B.zeros(self._reservoir.n_input + 1), derivationFeedbackScaling[:, 0]), axis=0)
+                    (
+                        B.zeros(self._reservoir.n_input + 1),
+                        derivationFeedbackScaling[:, 0],
+                    ),
+                    axis=0,
+                )
 
                 # calculate gradients
-                gradientSR = B.dot(-error,
-                                   B.dot(self._reservoir._WOut, derivationConcatinationSpectralRadius) + B.dot(
-                                       WoutPrimeSR, B.vstack((1, u, x))[:, 0]))
+                gradientSR = B.dot(
+                    -error,
+                    B.dot(self._reservoir._WOut, derivationConcatinationSpectralRadius)
+                    + B.dot(WoutPrimeSR, B.vstack((1, u, x))[:, 0]),
+                )
                 srGradients[t] = gradientSR
-                gradientLR = B.dot(-error,
-                                   B.dot(self._reservoir._WOut, derivationConcatinationLeakingRate) + B.dot(
-                                       WoutPrimeLR, B.vstack((1, u, x))[:, 0]))
+                gradientLR = B.dot(
+                    -error,
+                    B.dot(self._reservoir._WOut, derivationConcatinationLeakingRate)
+                    + B.dot(WoutPrimeLR, B.vstack((1, u, x))[:, 0]),
+                )
                 lrGradients[t] = gradientLR
-                gradientIS = B.dot(-error,
-                                   B.dot(self._reservoir._WOut, derivationConcatinationInputScaling) + B.dot(
-                                       WoutPrimeIS, B.vstack((1, u, x))[:, 0]))
+                gradientIS = B.dot(
+                    -error,
+                    B.dot(self._reservoir._WOut, derivationConcatinationInputScaling)
+                    + B.dot(WoutPrimeIS, B.vstack((1, u, x))[:, 0]),
+                )
                 isGradients[t] = gradientIS
-                gradientFS = B.dot(-error,
-                                   B.dot(self._reservoir._WOut, derivationConcatinationFeedbackScaling) + B.dot(
-                                       WoutPrimeFS, B.vstack((1, u, x))[:, 0]))
+                gradientFS = B.dot(
+                    -error,
+                    B.dot(self._reservoir._WOut, derivationConcatinationFeedbackScaling)
+                    + B.dot(WoutPrimeFS, B.vstack((1, u, x))[:, 0]),
+                )
                 fsGradients[t] = gradientFS
 
             # sum up the gradients del error / del (rho, alpha, s_in) to get final gradient
@@ -736,7 +1312,9 @@ class GradientOptimizer(object):
             gradientFS = sum(fsGradients)
 
             # normalize length of gradient to 1
-            gradientVectorLength = B.sqrt(gradientSR ** 2 + gradientLR ** 2 + gradientIS ** 2 + gradientFS ** 2)
+            gradientVectorLength = B.sqrt(
+                gradientSR ** 2 + gradientLR ** 2 + gradientIS ** 2 + gradientFS ** 2
+            )
 
             gradientSR /= gradientVectorLength
             gradientLR /= gradientVectorLength
@@ -744,20 +1322,33 @@ class GradientOptimizer(object):
             gradientFS /= gradientVectorLength
 
             # update spectral radius
-            self._reservoir.setSpectralRadius(self._reservoir._spectralRadius - learningRate * gradientSR)
+            self._reservoir.setSpectralRadius(
+                self._reservoir._spectralRadius - learningRate * gradientSR
+            )
 
             # update leaking rate
-            self._reservoir.setLeakingRate(self._reservoir._leakingRate - learningRate * gradientLR)
+            self._reservoir.setLeakingRate(
+                self._reservoir._leakingRate - learningRate * gradientLR
+            )
 
             # update input scaling
-            self._reservoir.setInputScaling(self._reservoir._inputScaling - learningRate * gradientIS)
+            self._reservoir.setInputScaling(
+                self._reservoir._inputScaling - learningRate * gradientIS
+            )
 
             # update input scaling
-            self._reservoir.setFeedbackScaling(self._reservoir._feedbackScaling - learningRate * gradientFS)
+            self._reservoir.setFeedbackScaling(
+                self._reservoir._feedbackScaling - learningRate * gradientFS
+            )
 
             # calculate the errors and update the self.designMatrix and the W_out
-            fitLoss = self._reservoir.fit(trainingInputData, trainingOutputData, transientTime=transientTime)
-            validationLoss = hlp.loss(self._reservoir.generate(optimizationLength, trainingInputData[-1]), validationOutputData)
+            fitLoss = self._reservoir.fit(
+                trainingInputData, trainingOutputData, transientTime=transientTime
+            )
+            validationLoss = hlp.loss(
+                self._reservoir.generate(optimizationLength, trainingInputData[-1]),
+                validationOutputData,
+            )
 
             # this is the "when the error goes up, go back and divide learning rate by 2" mechanism
             if validationLoss > oldLoss:
@@ -767,7 +1358,7 @@ class GradientOptimizer(object):
                 self._reservoir.setFeedbackScaling(oldFS)
                 learningRate = learningRate / 2
             else:
-                learningRate = min(learningRate*1.5, originalLearningRate)
+                learningRate = min(learningRate * 1.5, originalLearningRate)
 
                 oldSR = self._reservoir._spectralRadius
                 oldLR = self._reservoir._leakingRate
@@ -788,4 +1379,11 @@ class GradientOptimizer(object):
         if verbose > 0:
             bar.finish()
 
-        return (validationLosses, fitLosses, inputScalings, leakingRates, spectralRadiuses, learningRates)
+        return (
+            validationLosses,
+            fitLosses,
+            inputScalings,
+            leakingRates,
+            spectralRadiuses,
+            learningRates,
+        )

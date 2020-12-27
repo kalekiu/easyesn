@@ -1,100 +1,107 @@
 import numpy as np
+from numpy import random
+import scipy as sp
+from scipy.sparse.linalg.eigen.arpack.arpack import ArpackNoConvergence
 
-def add(x, y):
-	return np.add(x, y)
+add = np.add
 
-def substract(x, y):
-	return np.substract(x, y)
+substract = np.subtract
 
-def dot(x, y):
-	return np.dot(x, y)
+dot = np.dot
 
-def multiply(x, y):
-	return np.multiply(x, y)
+multiply = np.multiply
 
-def eigenval(x):
-	return np.linalg.eig(x)
+eigenval = np.linalg.eig
 
-def array(x):
-	return np.array(x)
 
-def inv(x):
-	return np.linalg.inv(x)
+def ishermitian(A, tol=1e-6):
+    x = sp.rand(A.shape[0], 1)
+    y = sp.rand(A.shape[0], 1)
+    if A.dtype == complex:
+        x = x + 1.0j * sp.rand(A.shape[0], 1)
+        y = y + 1.0j * sp.rand(A.shape[0], 1)
+    xAy = np.dot((A * x).conjugate().T, y)
+    xAty = np.dot(x.conjugate().T, A * y)
+    diff = float(np.abs(xAy - xAty) / np.sqrt(np.abs(xAy * xAty)))
+    if diff < tol:
+        diff = 0
+        return True
+    else:
+        return False
 
-def pinv(x):
-	return np.linalg.pinv(x)
 
-def arctan(x):
-	return np.arctan(x)
+def eigvals(x):
+    try:
+        if sp.sparse.isspmatrix(x):
+            if ishermitian(A):
+                _eig = sp.sparse.linalg.eigsh(x)[0]
+            else:
+                _eig = sp.sparse.linalg.eigs(x)[0]
+        else:
+            A = np.asmatrix(x)
+            if ishermitian(A):
+                _eig = sp.linalg.eigvalsh(x)
+            else:
+                _eig = sp.linalg.eigvals(x)
+    except ArpackNoConvergence:
+        _eig = sp.linalg.eigvals(x)
+    return _eig
 
-def vstack(x):
-	return np.vstack(x)
 
-def abs(x):
-	return np.abs(x)
+array = np.array
 
-def max(x):
-	return np.max(x)
+inv = np.linalg.inv
 
-def ones(x):
-	return np.ones(x)
+pinv = np.linalg.pinv
 
-def zeros(x):
-	return np.zeros(x)
+arctan = np.arctan
 
-def empty(x):
-	return np.empty(x)
+vstack = np.vstack
 
-def mean(x, axis=None):
-	return np.mean(x, axis)
+abs = np.abs
 
-def sqrt(x):
-	return np.sqrt(x)
+max = np.max
 
-def identity(x):
-	return np.identity(x)
+ones = np.ones
 
-def rand(*x):
-	return np.random.rand(*x)
+zeros = np.zeros
 
-def power(x, y):
-	return np.power(x, y)
+empty = np.empty
 
-def exp(x):
-	return np.exp(x)
+mean = np.mean
 
-def cosh(x):
-    return np.cosh(x)  
+sqrt = np.sqrt
 
-def log(x):
-    return np.log(x)
+identity = np.identity
 
-def tanh(x):
-	return np.tanh(x)
+rand = np.random.rand
 
-def concatenate(tuple, axis=0):
-	return np.concatenate(tuple, axis=axis)
+power = np.power
 
-def sign(x):
-	return np.sign(x)
+exp = np.exp
 
-def argmax(x, axis):
-    return np.argmax(x, axis)
+cosh = np.cosh
 
-def zeros_like(x):
-    return np.zeros_like(x)
+log = np.log
 
-def all(x):
-	return np.all(x)
+tanh = np.tanh
 
-def correlate(a, v, mode='valid'):
-	return np.correlate(a, v, mode=mode)
+concatenate = np.concatenate
 
-def var(x):
-	return np.var(x)
+sign = np.sign
 
-def allclose(x, y, atol=1e-05, rtol=0, equal_nan=False):
-    return np.allclose(x, y, atol, rtol, equal_nan)
+argmax = np.argmax
 
-def ptp(x, axis=None):
-    return np.ptp(x, axis)
+zeros_like = np.zeros_like
+
+all = np.all
+
+correlate = np.correlate
+
+var = np.var
+
+allclose = np.allclose
+
+ptp = np.ptp
+
+randint = random.randint

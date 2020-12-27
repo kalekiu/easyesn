@@ -1,97 +1,89 @@
 import cupy as cp
+import numpy as np
 
-def add(x, y):
-	return cp.add(x, y)
+add = cp.add
 
-def substract(x, y):
-	return cp.substract(x, y)
+substract = cp.subtract
 
-def dot(x, y):
-	return cp.dot(x, y)
+dot = cp.dot
 
-def multiply(x, y):
-	return cp.multiply(x, y)
+multiply = cp.multiply
 
-def eigenval(x):
-	import numpy as np
-	np_x = cp.asnumpy(x)
-	results = np.linalg.eig(np_x)
-	return cp.array(results[0]), cp.array([results[1]])
+eigenval = np.linalg.eig
 
-def array(x):
-	return cp.array(x)
+array = cp.array
 
-def inv(x):
-	return cp.linalg.inv(x)
+inv = cp.linalg.inv
 
-def pinv(x):
-	return cp.linalg.pinv(x)
+pinv = cp.linalg.pinv
 
-def arctan(x):
-	return cp.arctan(x)
+arctan = cp.arctan
 
-def vstack(x):
-	return cp.vstack(x)
+vstack = cp.vstack
 
-def abs(x):
-	return cp.abs(x)
+abs = cp.abs
 
-def max(x):
-	return cp.max(x)
+max = cp.max
 
-def ones(x):
-	return cp.ones(x)
+ones = cp.ones
 
-def zeros(x):
-	return cp.zeros(x)
+zeros = cp.zeros
 
-def empty(x):
-	return cp.empty(x)
+empty = cp.empty
 
-def mean(x, axis=None):
-	return cp.mean(x, axis)
+mean = cp.mean
 
-def sqrt(x):
-	return cp.sqrt(x)
+sqrt = cp.sqrt
 
-def identity(x):
-	return cp.identity(x)
+identity = cp.identity
 
-def rand(*x):
-	return cp.random.rand(*x)
+rand = cp.random.rand
 
-def power(x, y):
-	return cp.power(x, y)
+power = cp.power
 
-def exp(x):
-	return cp.exp(x)
+exp = cp.exp
 
-def cosh(x):
-    return cp.cosh(x)  
+cosh = cp.cosh
 
-def log(x):
-    return cp.log(x)
+log = cp.log
 
-def tanh(x):
-	return cp.tanh(x)
+tanh = cp.tanh
 
-def concatenate(tuple, axis=0):
-	return cp.concatenate(tuple, axis=axis)
+concatenate = cp.concatenate
 
-def sign(x):
-	return cp.sign(x)
+sign = cp.sign
 
-def argmax(x, axis):
-    return cp.argmax(x, axis)
+argmax = cp.argmax
 
-def zeros_like(x):
-    return cp.zeros_like(x)
+zeros_like = cp.zeros_like
 
-def var(x):
-	return cp.var(x)
+all = cp.all
 
-def allclose(x, y, atol=1e-05, rtol=0, equal_nan=False):
-	return cp.allclose(x, y, atol, rtol, equal_nan)
+var = cp.var
 
-def ptp(x, axis=None):
-    return cp.subtract(cp.amax(x, axis), cp.amin(x, axis))
+allclose = cp.allclose
+
+# ptp emulation: definition extracted from numpy
+ptp = lambda x, axis=None: cp.subtract(cp.amax(x, axis), cp.amin(x, axis))
+
+count_nonzero = cp.count_nonzero
+
+arange = np.arange
+
+sin = cp.sin
+
+cos = cp.cos
+
+isscalar = cp.isscalar
+
+std = cp.std
+
+ceil = cp.ceil
+
+rand = cp.random.rand
+
+seed = cp.random.seed
+
+permutation = cp.random.permutation
+
+randint = cp.random.randint
