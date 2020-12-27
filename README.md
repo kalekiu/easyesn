@@ -84,6 +84,17 @@ At the moment, these are supported backend names:
 |   `cp`    | `cupy` (GPU)| no eig & arange function which is limiting the speed |
 |   `torch`    | `torch` (CPU/GPU)| **experimental** (Blasting fast but tested/developed for only on PredictionESN)|
 
+To set which device the `torch` backend should use, use the following `easyesn.json` config:
+   ```json
+   {
+    "backend": "torch",
+    "backend_config": {
+        "device": "cpu"
+       }
+   }
+   ```
+where `cpu` can be replaced with any valid `torch.device`, e.g. `cuda`.
+
 # Notes
 As of right now, the `GradientOptimizer` does not fully work - we are looking into this and try to fix the issue.
 
