@@ -1,10 +1,11 @@
 import sys
 import torch
 import numpy as np
+from . import _BACKEND_CONFIG
 
 
 __device = torch.device("cpu")
-__dtype = "float32"
+__dtype = torch.float32
 
 
 def get_device():
@@ -22,13 +23,23 @@ def get_dtype():
 
 def set_dtype(dtype):
     global __dtype
-    assert dtype in ("float32", "float64")
-    __dtype = dtype
+    lut = {
+        "float16": torch.float16,
+        "float32": torch.float32,
+        "float64": torch.float64,
+    }
+    assert dtype in lut.keys()
+    __dtype = lut[dtype]
 
 
-if torch.cuda.is_available():
-    set_device("torch")
-    sys.stderr.write("Torch Backend is using CUDA\n")
+if "device" in _BACKEND_CONFIG:
+    set_device(_BACKEND_CONFIG["device"])
+    sys.stderr.write("Using device `{0}` as specified by config".format(get_device()))
+
+else:
+    if torch.cuda.is_available():
+        device = "torch"
+        sys.stderr.write("Torch Backend is using CUDA\n")
 
 
 add = torch.add
@@ -57,16 +68,16 @@ abs = torch.abs
 
 max = torch.max
 
-ones = lambda *args, **kwargs: torch.ones(
-    *args, **kwargs, device=__device, dtype=__dtype
+ones = lambda shape, *args, **kwargs: torch.ones(
+    _make_tuple(shape), *args, **kwargs, device=__device, dtype=__dtype
 )
 
-zeros = lambda *args, **kwargs: torch.zeros(
-    *args, **kwargs, device=__device, dtype=__dtype
+zeros = lambda shape, *args, **kwargs: torch.zeros(
+    _make_tuple(shape), *args, **kwargs, device=__device, dtype=__dtype
 )
 
-empty = lambda *args, **kwargs: torch.empty(
-    *args, **kwargs, device=__device, dtype=__dtype
+empty = lambda shape, *args, **kwargs: torch.empty(
+    _make_tuple(shape), *args, **kwargs, device=__device, dtype=__dtype
 )
 
 mean = torch.mean
@@ -129,3 +140,12 @@ seed = torch.seed
 permutation = torch.randperm
 
 randint = lambda *args, **kwargs: torch.randint(*args, **kwargs, device=__device)
+
+
+def _make_tuple(x):
+    if isinstance(x, int):
+        return (x,)
+    elif isinstance(x, (tuple, list)):
+        return x
+    else:
+        raise ValueError

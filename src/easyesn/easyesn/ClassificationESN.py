@@ -238,7 +238,7 @@ class ClassificationESN(BaseESN):
         elif self._solver in ["sklearn_svr", "sklearn_svc"]:
             self._ridgeSolver = SVR(**self._regressionParameters)
 
-            self._ridgeSolver.fit(self._X.T, Y_target.T.ravel())
+            self._ridgeSolver.fit(self._X.T, Y_target.T.flatten())
 
             # calculate the training prediction now
             train_prediction = self.out_activation(self._ridgeSolver.predict(self._X.T))

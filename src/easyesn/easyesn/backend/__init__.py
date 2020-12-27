@@ -28,7 +28,10 @@ if os.path.exists(_config_path):
     if _backend == "np":
         _backend = "numpy"
 
+    _backend_config = _config.get("backend_config", {})
+
     _BACKEND = _backend
+    _BACKEND_CONFIG = _backend_config
 
 # Save config file, if possible.
 if not os.path.exists(_easyesn_dir):
@@ -57,6 +60,7 @@ if "EASYESN_BACKEND" in os.environ:
         _backend = "numpy"
 
     _BACKEND = _backend
+    _BACKEND_CONFIG = {}
 
 if _BACKEND == "cupy":
     sys.stderr.write("Using CuPy backend\n")

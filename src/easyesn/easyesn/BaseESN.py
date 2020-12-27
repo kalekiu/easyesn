@@ -183,7 +183,7 @@ class BaseESN(object):
                                 B.vstack((B.array(self._outputBias), self._x)),
                             )
                         if t >= transientTime:
-                            Y[t - transientTime, :] = previousOutputData.ravel()
+                            Y[t - transientTime, :] = previousOutputData.flatten()
                     else:
                         previousOutputData = outputData[t]
 
