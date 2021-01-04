@@ -51,25 +51,25 @@ class GradientOptimizer(object):
         X = self._reservoir.calculateLinearNetworkTransmissions(u)
 
         activationX = self._reservoir._activation(X)
-        activationDerivationX = self._reservoir._activationDerivation(X)
+        activationDerivativeX = self._reservoir._activationDerivative(X)
 
         dLr = (
             (1 - a) * doldLr
             - x
             + activationX
-            + a * activationDerivationX * B.dot(self._reservoir._W, doldLr)
+            + a * activationDerivativeX * B.dot(self._reservoir._W, doldLr)
         )
-        dSr = (1 - a) * doldSr + a * activationDerivationX * (
+        dSr = (1 - a) * doldSr + a * activationDerivativeX * (
             B.dot(self._reservoir._W, doldSr) + B.dot(W_uniform, x)
         )
 
         u = B.vstack((1, u))
-        dIs = (1 - a) * doldIs + a * activationDerivationX * (
+        dIs = (1 - a) * doldIs + a * activationDerivativeX * (
             B.dot(self._reservoir._W, doldIs) + B.dot(W_in_uniform, u)
         )
 
         if generative:
-            dFs = (1 - a) * doldFs + a * activationDerivationX * (
+            dFs = (1 - a) * doldFs + a * activationDerivativeX * (
                 B.dot(self._reservoir.W, doldFs) + B.dot(W_fb_uniform, oldy)
             )
             return dLr, dSr, dIs, dFs
@@ -912,7 +912,7 @@ class GradientOptimizer(object):
         ooldX = B.vstack((u, ooldX))
 
         activationX = self._reservoir._activation(X)
-        activationDerivationX = self._reservoir._activationDerivation(X)
+        activationDerivativeX = self._reservoir._activationDerivative(X)
 
         dyLr = B.dot(self._reservoir._WOut, dooldXLr) + B.dot(dWoutLr, ooldX)
         dyIs = B.dot(self._reservoir._WOut, dooldXIs) + B.dot(dWoutIs, ooldX)
@@ -924,25 +924,25 @@ class GradientOptimizer(object):
             - oldX
             + activationX
             + a
-            * activationDerivationX
+            * activationDerivativeX
             * (
                 B.dot(self._reservoir._W, doldLr)
                 + B.dot(self._reservoir._WFeedback, dyLr)
             )
         )
-        dSr = (1 - a) * doldSr + a * activationDerivationX * (
+        dSr = (1 - a) * doldSr + a * activationDerivativeX * (
             B.dot(self._reservoir._W, doldSr)
             + B.dot(W_uniform, oldX)
             + B.dot(self._reservoir._WFeedback, dySr)
         )
 
-        dIs = (1 - a) * doldIs + a * activationDerivationX * (
+        dIs = (1 - a) * doldIs + a * activationDerivativeX * (
             B.dot(self._reservoir._W, doldIs)
             + B.dot(W_in_uniform, u)
             + B.dot(self._reservoir._WFeedback, dyIs)
         )
 
-        dFs = (1 - a) * doldFs + a * activationDerivationX * (
+        dFs = (1 - a) * doldFs + a * activationDerivativeX * (
             B.dot(self._reservoir.W, doldFs)
             + B.dot(W_fb_uniform, oldy)
             + B.dot(self._reservoir.W_feedback, dyFs)

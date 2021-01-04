@@ -152,9 +152,40 @@ class SpatioTemporalESN(BaseESN):
         solver="pinv",
         regressionParameters={},
         activation=B.tanh,
-        activationDerivation=lambda x: 1.0 / B.cosh(x) ** 2,
+        activationDerivative=lambda x: 1.0 / B.cosh(x) ** 2,
         chunkSize=16,
     ):
+        """ ESN that predicts (steps of) a spatio-temporal time series based on a time series.
+
+            Args:
+                inputShape : Shape of the input w/o the time axis, e.g. (W, H) for a 2D input.
+                n_reservoir : Number of units in the reservoir.
+                filterSize : Size of patches used to predict a single output element.
+                stride : Stride between different patches.
+                borderMode : How to handle border values. Choices: mirror, padding, edge, wrap.
+                nWorkers : Number of CPU threads executed in parallel to solve the problem.
+                spectralRadius : Spectral radius of the reservoir's connection/weight matrix.
+                noiseLevel : Magnitude of noise that is added to the input while fitting to prevent overfitting.
+                inputScaling : Scaling factor of the input.
+                leakingRate : Convex combination factor between 0 and 1 that weights current and new state value.
+                reservoirDensity : Percentage of non-zero weight connections in the reservoir.
+                randomSeed : Seed for random processes, e.g. weight initialization.
+                averageOutputWeights : Average output matrices after fitting across all pixels or use a distinct matrix
+                                        per pixel. The former assumes homogeneity of the problem across all pixels.
+                out_activation : Final activation function (i.e. activation function of the output).
+                out_inverse_activation : Inverse of the final activation function
+                weightGeneration : Algorithm to generate weight matrices. Choices: naive, SORM, advanced, custom
+                bias : Size of the bias added for the internal update process.
+                outputBias : Size of the bias added for the final linear regression of the output.
+                outputInputScaling : Rescaling factor for the input of the ESN for the regression.
+                inputDensity : Percentage of non-zero weights in the input-to-reservoir weight matrix.
+                solver : Algorithm to find output matrix. Choices: pinv, lsqr.
+                regressionParameters : Arguments to the solving algorithm. For LSQR this controls the L2 regularization.
+                activation : (Non-linear) Activation function.
+                activationDerivative : Derivative of the activation function.
+                chunkSize : Internal parameter for the multi-threading. For long time series this should be reduced to
+                            avoid OOM errors/getting stuck and to reduce memory consumption.
+        """
 
         self._averageOutputWeights = averageOutputWeights
         if averageOutputWeights and solver != "lsqr":
@@ -226,7 +257,7 @@ class SpatioTemporalESN(BaseESN):
             outputInputScaling=outputInputScaling,
             inputDensity=inputDensity,
             activation=activation,
-            activationDerivation=activationDerivation,
+            activationDerivative=activationDerivative,
         )
 
         """

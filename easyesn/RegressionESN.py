@@ -34,8 +34,32 @@ class RegressionESN(BaseESN):
         solver="pinv",
         regressionParameters={},
         activation=B.tanh,
-        activationDerivation=lambda x: 1.0 / B.cosh(x) ** 2,
+        activationDerivative=lambda x: 1.0 / B.cosh(x) ** 2,
     ):
+        """ ESN that predicts a single value from a time series
+
+        Args:
+            n_input : Dimensionality of the input.
+            n_reservoir : Number of units in the reservoir.
+            n_output : Dimensionality of the output.
+            spectralRadius : Spectral radius of the reservoir's connection/weight matrix.
+            noiseLevel : Magnitude of noise that is added to the input while fitting to prevent overfitting.
+            inputScaling : Scaling factor of the input.
+            leakingRate : Convex combination factor between 0 and 1 that weights current and new state value.
+            reservoirDensity : Percentage of non-zero weight connections in the reservoir.
+            randomSeed : Seed for random processes, e.g. weight initialization.
+            out_activation : Final activation function (i.e. activation function of the output).
+            out_inverse_activation : Inverse of the final activation function
+            weightGeneration : Algorithm to generate weight matrices. Choices: naive, SORM, advanced, custom
+            bias : Size of the bias added for the internal update process.
+            outputBias : Size of the bias added for the final linear regression of the output.
+            outputInputScaling : Rescaling factor for the input of the ESN for the regression.
+            inputDensity : Percentage of non-zero weights in the input-to-reservoir weight matrix.
+            solver : Algorithm to find output matrix. Choices: pinv, lsqr.
+            regressionParameters : Arguments to the solving algorithm. For LSQR this controls the L2 regularization.
+            activation : (Non-linear) Activation function.
+            activationDerivative : Derivative of the activation function.
+        """
 
         super(RegressionESN, self).__init__(
             n_input=n_input,
@@ -55,7 +79,7 @@ class RegressionESN(BaseESN):
             outputInputScaling=outputInputScaling,
             inputDensity=inputDensity,
             activation=activation,
-            activationDerivation=activationDerivation,
+            activationDerivative=activationDerivative,
         )
 
         self._solver = solver

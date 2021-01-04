@@ -32,8 +32,32 @@ class BaseESN(object):
         feedback=False,
         inputDensity=1.0,
         activation=B.tanh,
-        activationDerivation=lambda x: 1.0 / B.cosh(x) ** 2,
+        activationDerivative=lambda x: 1.0 / B.cosh(x) ** 2,
     ):
+        """Implementation of a ESN.
+
+        Args:
+            n_input : Dimensionality of the input.
+            n_reservoir : Number of units in the reservoir.
+            n_output : Dimensionality of the output.
+            spectralRadius : Spectral radius of the reservoir's connection/weight matrix.
+            noiseLevel : Magnitude of noise that is added to the input while fitting to prevent overfitting.
+            inputScaling : Scaling factor of the input.
+            leakingRate : Convex combination factor between 0 and 1 that weights current and new state value.
+            feedbackScaling : Rescaling factor of the output-to-input feedback in the update process.
+            reservoirDensity : Percentage of non-zero weight connections in the reservoir.
+            randomSeed : Seed for random processes, e.g. weight initialization.
+            out_activation : Final activation function (i.e. activation function of the output).
+            out_inverse_activation : Inverse of the final activation function
+            weightGeneration : Algorithm to generate weight matrices. Choices: naive, SORM, advanced, custom
+            bias : Size of the bias added for the internal update process.
+            outputBias : Size of the bias added for the final linear regression of the output.
+            outputInputScaling : Rescaling factor for the input of the ESN for the regression.
+            feedback : Include output-input feedback in the ESN.
+            inputDensity : Percentage of non-zero weights in the input-to-reservoir weight matrix.
+            activation : (Non-linear) Activation function.
+            activationDerivative : Derivative of the activation function.
+        """
 
         self.n_input = n_input
         self.n_reservoir = n_reservoir
@@ -46,7 +70,7 @@ class BaseESN(object):
         self._feedbackScaling = feedbackScaling
         self.inputDensity = inputDensity
         self._activation = activation
-        self._activationDerivation = activationDerivation
+        self._activationDerivative = activationDerivative
         self._inputScaling = inputScaling
 
         if self._inputScaling is None:
