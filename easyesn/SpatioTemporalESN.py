@@ -1,24 +1,25 @@
 """
-    Implementation of the general ESN model.
+    Implementation of the Spatio-Temporal ESN model.
+    See `Observing spatio-temporal dynamics of excitable
+    media using reservoir computing` by Zimmermann et al.
+    for details.
 """
 
 import numpy as np
 from easyesn.BaseESN import BaseESN
-
 from easyesn import backend as B
-
 import progressbar
 import sys
 
-# import dill
-
+# we require Pathos version >=0.2.6. Otherwise we will get an "EOFError: Ran out of input" exception
 from multiprocess import (
     Manager,
     Pool,
     cpu_count,
-)  # we require Pathos version >=0.2.6. Otherwise we will get an "EOFError: Ran out of input" exception
+)
 
-# import multiprocessing
+
+__all__ = ["SpatioTemporalESN"]
 
 
 class PredictionArrayIterator:
@@ -152,6 +153,7 @@ class SpatioTemporalESN(BaseESN):
         regressionParameters={},
         activation=B.tanh,
         activationDerivation=lambda x: 1.0 / B.cosh(x) ** 2,
+        chunkSize=16,
     ):
 
         self._averageOutputWeights = averageOutputWeights
@@ -203,6 +205,8 @@ class SpatioTemporalESN(BaseESN):
             self.parallelWorkerIDs = manager.Queue()
             for i in range(self._nWorkers):
                 self.parallelWorkerIDs.put((i))
+
+        self._chunkSize = chunkSize
 
         super(SpatioTemporalESN, self).__init__(
             n_input=self._n_input,
@@ -286,11 +290,10 @@ class SpatioTemporalESN(BaseESN):
 
         return modifiedInputData
 
-    """
-        Fits the ESN so that by applying a time series out of inputData the outputData will be produced.
-    """
-
     def fit(self, inputData, outputData, transientTime=0, verbose=0):
+        """
+        Fits the ESN so that by applying a time series out of inputData the outputData will be produced.
+        """
         rank = len(inputData.shape) - 1
 
         if rank != self.n_inputDimensions and rank != self.n_inputDimensions + 1:
@@ -316,6 +319,10 @@ class SpatioTemporalESN(BaseESN):
         fitQueue = manager.Queue()
 
         modifiedInputData = self._embedInputData(inputData)
+
+        if SpatioTemporalESN._isWindows():
+            self.sharedNamespace.inputData = modifiedInputData
+            self.sharedNamespace.outputData = outputData
 
         self.sharedNamespace.transientTime = transientTime
 
@@ -347,7 +354,7 @@ class SpatioTemporalESN(BaseESN):
             initializer=SpatioTemporalESN._init_fitProcess,
             initargs=[fitQueue, self],
         )
-        pool.map_async(self._fitProcess, iterator, chunksize=16)
+        pool.map_async(self._fitProcess, iterator, chunksize=self._chunkSize)
 
         def _processPoolWorkerResults():
             nJobsDone = 0
@@ -398,13 +405,13 @@ class SpatioTemporalESN(BaseESN):
 
         pool.close()
 
-    """
-        Use the ESN in the predictive mode to predict the output signal by using an input signal.
-    """
-
     def predict(
         self, inputData, transientTime=0, update_processor=lambda x: x, verbose=0
     ):
+        """
+        Use the ESN in the predictive mode to predict the output signal by using an input signal.
+        """
+
         rank = len(inputData.shape) - 1
 
         if rank != self.n_inputDimensions:
@@ -423,6 +430,9 @@ class SpatioTemporalESN(BaseESN):
         modifiedInputData = self._embedInputData(inputData)
         modifiedInputData = modifiedInputData[0]
         inputData = inputData[0]
+
+        if SpatioTemporalESN._isWindows():
+            self.sharedNamespace.inputData = modifiedInputData
 
         self.transientTime = transientTime
         self.sharedNamespace.transientTime = transientTime
@@ -453,7 +463,7 @@ class SpatioTemporalESN(BaseESN):
             initializer=SpatioTemporalESN._init_predictProcess,
             initargs=[predictQueue, self],
         )
-        pool.map_async(self._predictProcess, iterator, chunksize=200)  # , chunksize=1)
+        pool.map_async(self._predictProcess, iterator, chunksize=self._chunkSize)
 
         def _processPoolWorkerResults():
             nJobsDone = 0
@@ -553,9 +563,6 @@ class SpatioTemporalESN(BaseESN):
                     ),
                 )
 
-            # calculate the training prediction now
-            # trainingPrediction = self.out_activation(B.dot(WOut, X).T)
-
             # store the state and the output matrix of the worker
             SpatioTemporalESN._fitProcess.fitQueue.put(
                 (
@@ -592,12 +599,8 @@ class SpatioTemporalESN(BaseESN):
             # get internal id
             id = self._uniqueIDFromIndices([x - self._filterWidth for x in indices])
 
-            # self._x[workerID] = state # self.sharedNamespace.xs[id]
-
             # now fit
             X = self.propagate(inData, transientTime=transientTime, x=state, verbose=0)
-
-            # state = self._x[workerID]
 
             if self._averageOutputWeights:
                 WOut = self._WOut
@@ -614,7 +617,7 @@ class SpatioTemporalESN(BaseESN):
 
             self.parallelWorkerIDs.put(workerID)
         except Exception as ex:
-            print(ex)
+            print("Exception occurred in prediction thread", ex)
             import traceback
 
             traceback.print_exc()
